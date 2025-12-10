@@ -1,13 +1,12 @@
 import sys
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QToolButton, QMenu, QAction, QStackedWidget,QPushButton,
-    QLabel, QFrame, QSizePolicy, QFileDialog, QMessageBox
+    QPushButton, QStackedWidget, QLabel, QFileDialog, QMessageBox
 )
-from PyQt5.QtCore import Qt, QPoint
-from PyQt5.QtGui import QFont, QCursor
-
-# ====================== 页面组件（复用原有页面，无修改） ======================
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QFont
+from target_2 import target_2
+# ====================== 页面组件（复用，无修改） ======================
 class HomePage(QWidget):
     """首页展示页面"""
     def __init__(self):
@@ -78,15 +77,16 @@ class VideoFrame2PicPage(QWidget):
         btn_run = QPushButton("开始提取")
         btn_run.setFont(QFont("微软雅黑", 12))
         btn_run.setStyleSheet("background-color: #4CAF50; color: white; padding: 8px; border-radius: 5px;")
-        btn_run.clicked.connect(self.run_extract)
+        btn_run.clicked.connect(self.run_script)
         layout.addWidget(btn_run, alignment=Qt.AlignCenter)
+        self.btn_run = btn_run  # 保存引用，用于控制禁用/启用
 
     def select_video(self):
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "选择视频文件",
             "",
-            "视频文件 (*.mp4 *.avi *.mov *.mkv)"
+            "视频文件 (*.mp4 *.avi *.mov *.mkv *.*)"
         )
         if file_path:
             self.selected_video = file_path
@@ -98,15 +98,33 @@ class VideoFrame2PicPage(QWidget):
             self.selected_output = folder_path
             self.lbl_output.setText(f"已选文件夹：{folder_path}")
 
-    def run_extract(self):
+    def run_script(self):
+        """执行指定Python脚本"""
         if not self.selected_video:
             QMessageBox.warning(self, "提示", "请先选择视频文件！")
             return
         if not self.selected_output:
             QMessageBox.warning(self, "提示", "请先选择输出文件夹！")
             return
-        QMessageBox.information(self, "成功", f"开始提取 {self.selected_video} 的帧到 {self.selected_output}！")
 
+        # 禁用执行按钮，避免重复点击
+        self.btn_run.setDisabled(True)
+
+        try:
+            result,message=target_2(self.selected_video, self.selected_output)
+            # 显示结果弹窗
+            if result:
+                # 页面标题：执行结果  message：目标程序print所有打印的信息
+                QMessageBox.information(self, "执行结果", message, QMessageBox.Ok)
+            else:
+                QMessageBox.critical(self, "执行结果", message, QMessageBox.Ok)
+        except ImportError:
+            QMessageBox.critical(self, "错误", "找不到target_script.py模块！", QMessageBox.Ok)
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"执行异常：{str(e)}", QMessageBox.Ok)
+        finally:
+            # 启用按钮
+            self.btn_run.setDisabled(False)
 class VideoOtherToolsPage(QWidget):
     """视频其他工具页面"""
     def __init__(self):
@@ -137,10 +155,15 @@ class ImageProcessPage(QWidget):
         lbl.setFont(QFont("微软雅黑", 16))
         layout.addWidget(lbl)
 
-# ====================== 主窗口（核心修改：下拉式二级菜单） ======================
+# ====================== 主窗口（核心：多级菜单高亮） ======================
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        # 状态变量
+        self.video_menu_expanded = False  # 视频二级菜单展开状态
+        self.image_menu_expanded = False  # 图片二级菜单展开状态
+        self.current_selected_btn = None  # 当前选中的菜单按钮（一级/二级）
+        self.all_menu_btns = []           # 所有菜单按钮列表（用于批量取消选中）
         self.init_main_ui()
 
     def init_main_ui(self):
@@ -158,91 +181,97 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(0)
         main_layout.setContentsMargins(0, 0, 0, 0)
 
-        # ---------------------- 左侧菜单栏（核心修改） ----------------------
+        # ---------------------- 左侧菜单栏（核心优化） ----------------------
         left_menu_widget = QWidget()
         left_menu_widget.setStyleSheet("background-color: #2C3E50;")
         left_menu_widget.setFixedWidth(200)
-        left_layout = QVBoxLayout(left_menu_widget)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setSpacing(0)
-        left_layout.setAlignment(Qt.AlignTop)
+        # 左侧布局：垂直、顶部对齐、动态调整
+        self.left_layout = QVBoxLayout(left_menu_widget)
+        self.left_layout.setContentsMargins(0, 0, 0, 0)
+        self.left_layout.setSpacing(0)
+        self.left_layout.setAlignment(Qt.AlignTop)
 
-        # 1. 首页按钮（无下拉菜单，直接切换页面）
+        # 1. 首页菜单（一级）
         self.home_btn = self.create_main_menu_btn("首页")
-        self.home_btn.clicked.connect(lambda: self.stacked_widget.setCurrentWidget(self.home_page))
-        left_layout.addWidget(self.home_btn)
+        self.home_btn.clicked.connect(lambda: [
+            self.stacked_widget.setCurrentWidget(self.home_page),
+            self.set_selected_btn(self.home_btn)  # 选中首页按钮
+        ])
+        self.left_layout.addWidget(self.home_btn)
+        self.all_menu_btns.append(self.home_btn)  # 加入全局按钮列表
 
-        # 2. 视频按钮（带下拉二级菜单）
-        self.video_btn = self.create_main_menu_btn("视频", has_dropdown=True)
-        # 创建视频二级菜单
-        video_menu = QMenu(self)
-        video_menu.setStyleSheet("""
-            QMenu {
-                background-color: #34495E;
-                color: white;
-                font-size: 12px;
-                border: none;
-                padding: 5px 0;
-            }
-            QMenu::item {
-                padding: 8px 20px;
-                margin: 0;
-            }
-            QMenu::item:selected {
-                background-color: #3498DB;
-                color: white;
-            }
-        """)
-        # 添加视频二级菜单项
-        video_frame_action = QAction("视频帧转图片", self)
-        video_frame_action.triggered.connect(lambda: self.stacked_widget.setCurrentWidget(self.video_frame_page))
-        video_other_action = QAction("其他视频工具", self)
-        video_other_action.triggered.connect(lambda: self.stacked_widget.setCurrentWidget(self.video_other_page))
-        video_menu.addAction(video_frame_action)
-        video_menu.addAction(video_other_action)
-        # 绑定下拉菜单到视频按钮
-        self.video_btn.setMenu(video_menu)
-        # 设置下拉菜单弹出位置（按钮下方）
-        self.video_btn.clicked.connect(lambda: self.show_menu_at_btn(self.video_btn, video_menu))
-        left_layout.addWidget(self.video_btn)
+        # 2. 视频菜单组（一级按钮 + 二级菜单）
+        self.video_btn = self.create_main_menu_btn("视频")
+        self.video_btn.clicked.connect(self.toggle_video_submenu)
+        self.left_layout.addWidget(self.video_btn)
+        self.all_menu_btns.append(self.video_btn)  # 加入全局按钮列表
 
-        # 3. 图片按钮（带下拉二级菜单）
-        self.image_btn = self.create_main_menu_btn("图片", has_dropdown=True)
-        # 创建图片二级菜单
-        image_menu = QMenu(self)
-        image_menu.setStyleSheet("""
-            QMenu {
-                background-color: #34495E;
-                color: white;
-                font-size: 12px;
-                border: none;
-                padding: 5px 0;
-            }
-            QMenu::item {
-                padding: 8px 20px;
-                margin: 0;
-            }
-            QMenu::item:selected {
-                background-color: #3498DB;
-                color: white;
-            }
-        """)
-        # 添加图片二级菜单项
-        image_dedup_action = QAction("图片去重", self)
-        image_dedup_action.triggered.connect(lambda: self.stacked_widget.setCurrentWidget(self.image_dedup_page))
-        image_process_action = QAction("图片处理", self)
-        image_process_action.triggered.connect(lambda: self.stacked_widget.setCurrentWidget(self.image_process_page))
-        image_menu.addAction(image_dedup_action)
-        image_menu.addAction(image_process_action)
-        # 绑定下拉菜单到图片按钮
-        self.image_btn.setMenu(image_menu)
-        self.image_btn.clicked.connect(lambda: self.show_menu_at_btn(self.image_btn, image_menu))
-        left_layout.addWidget(self.image_btn)
+        # 视频二级菜单容器（初始隐藏）
+        self.video_submenu_widget = QWidget()
+        self.video_submenu_layout = QVBoxLayout(self.video_submenu_widget)
+        self.video_submenu_layout.setContentsMargins(20, 0, 0, 0)
+        self.video_submenu_layout.setSpacing(0)
 
-        # 填充左侧栏空白（避免按钮挤在一起）
-        left_layout.addStretch()
+        # 视频二级菜单-帧转图片
+        self.video_frame_btn = self.create_sub_menu_btn("视频帧转图片")
+        self.video_frame_btn.clicked.connect(lambda: [
+            self.stacked_widget.setCurrentWidget(self.video_frame_page),
+            self.set_selected_btn(self.video_frame_btn)  # 选中二级按钮
+        ])
+        self.video_submenu_layout.addWidget(self.video_frame_btn)
+        self.all_menu_btns.append(self.video_frame_btn)
 
-        # ---------------------- 右侧内容区（无修改） ----------------------
+        # 视频二级菜单-其他工具
+        self.video_other_btn = self.create_sub_menu_btn("其他视频工具")
+        self.video_other_btn.clicked.connect(lambda: [
+            self.stacked_widget.setCurrentWidget(self.video_other_page),
+            self.set_selected_btn(self.video_other_btn)  # 选中二级按钮
+        ])
+        self.video_submenu_layout.addWidget(self.video_other_btn)
+        self.all_menu_btns.append(self.video_other_btn)
+
+        # 初始隐藏二级菜单
+        self.video_submenu_widget.setVisible(False)
+        self.left_layout.addWidget(self.video_submenu_widget)
+
+        # 3. 图片菜单组（一级按钮 + 二级菜单）
+        self.image_btn = self.create_main_menu_btn("图片")
+        self.image_btn.clicked.connect(self.toggle_image_submenu)
+        self.left_layout.addWidget(self.image_btn)
+        self.all_menu_btns.append(self.image_btn)  # 加入全局按钮列表
+
+        # 图片二级菜单容器（初始隐藏）
+        self.image_submenu_widget = QWidget()
+        self.image_submenu_layout = QVBoxLayout(self.image_submenu_widget)
+        self.image_submenu_layout.setContentsMargins(20, 0, 0, 0)
+        self.image_submenu_layout.setSpacing(0)
+
+        # 图片二级菜单-去重
+        self.image_dedup_btn = self.create_sub_menu_btn("图片去重")
+        self.image_dedup_btn.clicked.connect(lambda: [
+            self.stacked_widget.setCurrentWidget(self.image_dedup_page),
+            self.set_selected_btn(self.image_dedup_btn)  # 选中二级按钮
+        ])
+        self.image_submenu_layout.addWidget(self.image_dedup_btn)
+        self.all_menu_btns.append(self.image_dedup_btn)
+
+        # 图片二级菜单-处理
+        self.image_process_btn = self.create_sub_menu_btn("图片处理")
+        self.image_process_btn.clicked.connect(lambda: [
+            self.stacked_widget.setCurrentWidget(self.image_process_page),
+            self.set_selected_btn(self.image_process_btn)  # 选中二级按钮
+        ])
+        self.image_submenu_layout.addWidget(self.image_process_btn)
+        self.all_menu_btns.append(self.image_process_btn)
+
+        # 初始隐藏二级菜单
+        self.image_submenu_widget.setVisible(False)
+        self.left_layout.addWidget(self.image_submenu_widget)
+
+        # 填充左侧栏空白
+        self.left_layout.addStretch()
+
+        # ---------------------- 右侧内容区 ----------------------
         self.stacked_widget = QStackedWidget()
         self.stacked_widget.setStyleSheet("background-color: #ECF0F1;")
 
@@ -264,65 +293,107 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.stacked_widget)
 
         # 默认选中首页
+        self.set_selected_btn(self.home_btn)
         self.stacked_widget.setCurrentWidget(self.home_page)
-        self.set_btn_selected(self.home_btn)
 
-    def create_main_menu_btn(self, text, has_dropdown=False):
-        """创建一级菜单按钮（支持是否带下拉箭头）"""
-        btn = QToolButton()
-        btn.setText(text)
+    def create_main_menu_btn(self, text):
+        """创建一级菜单按钮（文字居中，含选中样式）"""
+        btn = QPushButton(text)
         btn.setFixedWidth(200)
         btn.setMinimumHeight(50)
         btn.setFont(QFont("微软雅黑", 14, QFont.Bold))
-        # 设置按钮样式
-        btn_style = """
-            QToolButton {
+        # 核心：一级菜单样式（默认态 + hover + 选中态）
+        btn.setStyleSheet("""
+            /* 默认态 */
+            QPushButton {
                 background-color: #2C3E50;
                 color: white;
                 border: none;
                 border-bottom: 1px solid #34495E;
-                text-align: center;
+                text-align: center;  /* 文字居中 */
                 padding: 0;
             }
-            QToolButton:hover {
+            /* 悬浮态 */
+            QPushButton:hover {
                 background-color: #34495E;
             }
-            QToolButton:selected, QToolButton:pressed {
-                background-color: #3498DB;
+            /* 选中态（高亮） */
+            QPushButton:checked {
+                background-color: #3498DB;  /* 一级菜单高亮色 */
                 color: white;
+                border-left: 4px solid #FFFFFF;  /* 左侧高亮条，增强视觉 */
             }
-        """
-        if has_dropdown:
-            # 带下拉箭头的按钮样式
-            btn.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-            btn.setArrowType(Qt.DownArrow)
-            btn_style += """
-                QToolButton::down-arrow {
-                    image: none;
-                    border: none;
-                    color: white;
-                }
-            """
-        btn.setStyleSheet(btn_style)
-        # 允许按钮被选中
-        btn.setCheckable(True)
+        """)
+        btn.setCheckable(True)  # 允许选中状态
         return btn
 
-    def show_menu_at_btn(self, btn, menu):
-        """在按钮下方弹出下拉菜单"""
-        # 获取按钮在屏幕上的位置
-        btn_rect = btn.rect()
-        # 计算菜单弹出位置：按钮左下角，y轴偏移按钮高度
-        menu_pos = btn.mapToGlobal(QPoint(0, btn_rect.height()))
-        # 弹出菜单
-        menu.exec_(menu_pos)
-        # 取消按钮的选中状态（避免按钮一直高亮）
-        btn.setChecked(False)
+    def create_sub_menu_btn(self, text):
+        """创建二级菜单按钮（含选中样式）"""
+        btn = QPushButton(text)
+        btn.setFixedWidth(180)
+        btn.setMinimumHeight(40)
+        btn.setFont(QFont("微软雅黑", 12))
+        # 核心：二级菜单样式（默认态 + hover + 选中态）
+        btn.setStyleSheet("""
+            /* 默认态 */
+            QPushButton {
+                background-color: #2C3E50;
+                color: #E0E0E0;
+                border: none;
+                text-align: left;
+                padding-left: 15px;
+            }
+            /* 悬浮态 */
+            QPushButton:hover {
+                background-color: #34495E;
+                color: white;
+            }
+            /* 选中态（高亮） */
+            QPushButton:checked {
+                background-color: #2980B9;  /* 二级菜单高亮色（比一级浅） */
+                color: white;
+                border-left: 3px solid #FFFFFF;  /* 左侧短高亮条，区分层级 */
+            }
+        """)
+        btn.setCheckable(True)  # 允许选中状态
+        return btn
 
-    def set_btn_selected(self, target_btn):
-        """设置按钮为选中状态，取消其他按钮"""
-        for btn in [self.home_btn, self.video_btn, self.image_btn]:
-            btn.setChecked(btn == target_btn)
+    def toggle_video_submenu(self):
+        """切换视频二级菜单的展开/收起"""
+        self.video_menu_expanded = not self.video_menu_expanded
+        self.video_submenu_widget.setVisible(self.video_menu_expanded)
+        self.video_btn.setText("视频" if self.video_menu_expanded else "视频")
+        # 点击一级菜单但未选中二级时，选中一级菜单
+        if not self.video_menu_expanded:
+            self.set_selected_btn(self.video_btn)
+
+    def toggle_image_submenu(self):
+        """切换图片二级菜单的展开/收起"""
+        self.image_menu_expanded = not self.image_menu_expanded
+        self.image_submenu_widget.setVisible(self.image_menu_expanded)
+        self.image_btn.setText("图片" if self.image_menu_expanded else "图片")
+        # 点击一级菜单但未选中二级时，选中一级菜单
+        if not self.image_menu_expanded:
+            self.set_selected_btn(self.image_btn)
+
+    def set_selected_btn(self, target_btn):
+        """核心：设置目标按钮为选中态，取消所有其他按钮的选中态"""
+        # 1. 取消所有菜单按钮的选中态
+        for btn in self.all_menu_btns:
+            btn.setChecked(False)
+        # 2. 设置目标按钮为选中态
+        target_btn.setChecked(True)
+        # 3. 更新当前选中按钮状态
+        self.current_selected_btn = target_btn
+        # 4. 若选中二级菜单，自动展开对应一级菜单
+        if target_btn in [self.video_frame_btn, self.video_other_btn]:
+            self.video_menu_expanded = True
+            self.video_submenu_widget.setVisible(True)
+            self.video_btn.setText("视频")
+        elif target_btn in [self.image_dedup_btn, self.image_process_btn]:
+            self.image_menu_expanded = True
+            self.image_submenu_widget.setVisible(True)
+            self.image_btn.setText("图片")
 
 # ====================== 程序入口 ======================
 if __name__ == "__main__":
