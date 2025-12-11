@@ -193,24 +193,27 @@ class VideoFrame2PicPage(QWidget):
         self.btn_run = QPushButton("开始提取")
         self.btn_run.setFixedSize(120, 40)
         self.btn_run.setFont(QFont("微软雅黑", 12, QFont.Bold))
+        # 强化禁用样式：更明显的置灰效果
         self.btn_run.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #45A049;
-            }
-            QPushButton:disabled {
-                background-color: #95A5A6;
-                color: #EEEEEE;
-            }
-        """)
+                    QPushButton {
+                        background-color: #4CAF50;
+                        color: white;
+                        border: none;
+                        border-radius: 5px;
+                    }
+                    QPushButton:hover {
+                        background-color: #45A049;
+                    }
+                    QPushButton:disabled {
+                        background-color: #95A5A6;  /* 置灰颜色 */
+                        color: #EEEEEE;             /* 文字浅灰 */
+                        border: 1px solid #7F8C8D;  /* 边框加深，更明显 */
+                        cursor: not-allowed;        /* 鼠标禁用样式 */
+                    }
+                """)
+        #点击执行哪个方法
         self.btn_run.clicked.connect(self.run_extract)
         btn_row_layout.addWidget(self.btn_run)
-
         main_layout.addWidget(btn_row)
 
         # 4. 日志输出框
@@ -247,7 +250,6 @@ class VideoFrame2PicPage(QWidget):
         """)
         self.log_text.setMinimumHeight(200)
         log_layout.addWidget(self.log_text)
-
         main_layout.addWidget(log_group, stretch=1)
 
     def select_video(self):
@@ -256,7 +258,7 @@ class VideoFrame2PicPage(QWidget):
             self,
             "选择视频文件",
             "",
-            "视频文件 (*.mp4 *.avi *.mov *.mkv)"
+            "视频文件 (*.mp4 *.avi *.mov *.mkv *.*)"
         )
         if file_path:
             self.selected_video = file_path
@@ -287,23 +289,47 @@ class VideoFrame2PicPage(QWidget):
             QMessageBox.warning(self, "提示", "请先选择输出文件夹！")
             return
 
+        # 禁用执行按钮，避免重复点击
         self.btn_run.setDisabled(True)
-        self.append_log("📌 开始提取视频帧...")
+        self.btn_run.setText("提取中...")  # 按钮文字提示
+        QApplication.processEvents()  # 强制刷新UI
+
+        #在主线程执行
+        # self.run_target()
 
         self.extract_thread = ExtractThread(self.selected_video, self.selected_output)
-        self.extract_thread.log_signal.connect(self.append_log)
-        self.extract_thread.finish_signal.connect(self.on_extract_finish)
+        #这两个方法用于接收线程中发射出来的信号信息
+        self.extract_thread.log_signal.signatures.connect(self.append_log)
+        self.extract_thread.finish_signal.signatures.connect(self.on_extract_finish)
         self.extract_thread.start()
 
     def on_extract_finish(self, success, msg):
         """提取完成回调"""
         self.btn_run.setDisabled(False)
+        self.btn_run.setText("开始提取")  # 恢复按钮文字
         if success:
-            self.append_log(f"🎉 提取完成：{msg}")
+            self.append_log(f"🎉 {msg}")
             QMessageBox.information(self, "成功", msg)
         else:
-            self.append_log(f"❌ 提取失败：{msg}")
+            self.append_log(f"❌ {msg}")
             QMessageBox.critical(self, "失败", msg)
+
+    def run_target(self):
+        """提取逻辑"""
+        try:
+            from target_script import target_script_fun
+
+            self.append_log("⏳ 正在提取帧，视频越大，需要的时间越长，请耐心等待...")
+            result, msg = target_script_fun(self.selected_video, self.selected_output)
+            if result:
+                self.append_log(msg)
+                self.on_extract_finish(True, f"提取完成，输出路径：{self.selected_output}")
+            else:
+                self.append_log(msg)
+                self.on_extract_finish(False, f"提取失败，请检查输入文件和输出路径是否正确！")
+
+        except Exception as e:
+            self.on_extract_finish(False, str(e))
 
 class VideoOtherToolsPage(QWidget):
     """视频其他工具页面（统一样式）"""
@@ -424,38 +450,20 @@ class ExtractThread(QThread):
         self.output_dir = output_dir
 
     def run(self):
-        """模拟提取逻辑"""
+        """提取逻辑"""
         try:
-            import cv2
-            import os
+            from target_script import target_script_fun
 
-            self.log_signal.emit("🔍 正在解析视频文件...")
-            cap = cv2.VideoCapture(self.video_path)
-            if not cap.isOpened():
-                self.finish_signal.emit(False, "无法打开视频文件")
-                return
-
-            fps = cap.get(cv2.CAP_PROP_FPS)
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            self.log_signal.emit(f"📊 视频信息：帧率 {fps} | 总帧数 {total_frames}")
-
-            saved_frames = 0
-            self.log_signal.emit("⏳ 正在提取帧（请稍候）...")
-            while True:
-                ret, frame = cap.read()
-                if not ret:
-                    break
-
-                frame_path = os.path.join(self.output_dir, f"frame_{saved_frames:06d}.png")
-                cv2.imwrite(frame_path, frame)
-                saved_frames += 1
-
-                if saved_frames % 100 == 0:
-                    self.log_signal.emit(f"📈 已提取 {saved_frames}/{total_frames} 帧")
-
-            cap.release()
-            self.finish_signal.emit(True, f"共提取 {saved_frames} 帧图片，输出路径：{self.output_dir}")
-
+            def run_target():
+                self.log_signal.emit("⏳ 正在提取帧（请稍候）...")
+                result,msg=target_script_fun(self.video_path, self.output_dir)
+                if result:
+                    self.log_signal.emit(msg)
+                    self.finish_signal.emit(True, f"提取完成，输出路径：{self.output_dir}")
+                else:
+                    self.log_signal.emit(msg)
+                    self.finish_signal.emit(False, f"提取失败，请检查输入文件和输出路径是否正确！")
+            run_target()
         except Exception as e:
             self.finish_signal.emit(False, str(e))
 
@@ -503,7 +511,7 @@ class MainWindow(QMainWindow):
         self.all_menu_btns.append(self.home_btn)
 
         # 2. 视频菜单组
-        self.video_btn = self.create_main_menu_btn("视频 ▼")
+        self.video_btn = self.create_main_menu_btn("视频")
         self.video_btn.clicked.connect(self.toggle_video_submenu)
         self.left_layout.addWidget(self.video_btn)
         self.all_menu_btns.append(self.video_btn)
@@ -536,7 +544,7 @@ class MainWindow(QMainWindow):
         self.left_layout.addWidget(self.video_submenu_widget)
 
         # 3. 图片菜单组
-        self.image_btn = self.create_main_menu_btn("图片 ▼")
+        self.image_btn = self.create_main_menu_btn("图片")
         self.image_btn.clicked.connect(self.toggle_image_submenu)
         self.left_layout.addWidget(self.image_btn)
         self.all_menu_btns.append(self.image_btn)
@@ -655,7 +663,7 @@ class MainWindow(QMainWindow):
         """切换视频二级菜单"""
         self.video_menu_expanded = not self.video_menu_expanded
         self.video_submenu_widget.setVisible(self.video_menu_expanded)
-        self.video_btn.setText("视频 ▲" if self.video_menu_expanded else "视频 ▼")
+        self.video_btn.setText("视频" if self.video_menu_expanded else "视频")
         if self.video_menu_expanded and not any([self.video_frame_btn.isChecked(), self.video_other_btn.isChecked()]):
             self.set_selected_btn(self.video_btn)
 
@@ -663,7 +671,7 @@ class MainWindow(QMainWindow):
         """切换图片二级菜单"""
         self.image_menu_expanded = not self.image_menu_expanded
         self.image_submenu_widget.setVisible(self.image_menu_expanded)
-        self.image_btn.setText("图片 ▲" if self.image_menu_expanded else "图片 ▼")
+        self.image_btn.setText("图片" if self.image_menu_expanded else "图片")
         if self.image_menu_expanded and not any([self.image_dedup_btn.isChecked(), self.image_process_btn.isChecked()]):
             self.set_selected_btn(self.image_btn)
 
