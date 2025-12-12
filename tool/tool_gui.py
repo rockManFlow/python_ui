@@ -299,8 +299,9 @@ class VideoFrame2PicPage(QWidget):
 
         self.extract_thread = ExtractThread(self.selected_video, self.selected_output)
         #这两个方法用于接收线程中发射出来的信号信息
-        self.extract_thread.log_signal.signatures.connect(self.append_log)
-        self.extract_thread.finish_signal.signatures.connect(self.on_extract_finish)
+        ## 连接信号到槽函数
+        self.extract_thread.log_signal.connect(self.append_log)
+        self.extract_thread.finish_signal.connect(self.on_extract_finish)
         self.extract_thread.start()
 
     def on_extract_finish(self, success, msg):
@@ -455,7 +456,10 @@ class ExtractThread(QThread):
             from target_script import target_script_fun
 
             def run_target():
+                print(f"=== 线程开始执行 ===")
+                # 发射信号
                 self.log_signal.emit("⏳ 正在提取帧（请稍候）...")
+                # result, msg = True,"success"
                 result,msg=target_script_fun(self.video_path, self.output_dir)
                 if result:
                     self.log_signal.emit(msg)
