@@ -442,7 +442,7 @@ class ImageDeduplicationPage(QWidget):
         folder_row_layout.setAlignment(Qt.AlignCenter)
         folder_row_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.btn_folder = QPushButton("选择待去重文件夹")
+        self.btn_folder = QPushButton("去重文件夹")
         self.btn_folder.setFixedSize(150, 35)
         self.btn_folder.setFont(BUTTON_FONT)
         self.btn_folder.setStyleSheet("""
@@ -742,33 +742,66 @@ class ImageDedupThread(QThread):
         self.folder_path = folder_path
         self.is_delete_dup = is_delete_dup
 
+    #核心去重逻辑
+    def find_duplicates(self):
+        from duplicates_photo import del_file, get_image_phash, get_file_md5
+        md5_dict = {}
+        phash_dict = {}
+
+        # 总共满足的图片个数
+        conform_count = 0
+        # 删除个数
+        del_count = 0
+        # 重复或相似个数
+        dup_count = 0
+        for root, _, files in os.walk(self.folder_path):
+            for file in files:
+                if file.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    conform_count = conform_count + 1
+                    path = os.path.join(root, file)
+                    try:
+                        # 第一层：MD5快速比对
+                        file_md5 = get_file_md5(path)
+                        if file_md5 in md5_dict:
+                            dup_count = dup_count + 1
+                            # print(f'完全重复文件: {path} <=> {md5_dict[file_md5]}')
+                            self.log_signal.emit(f'完全重复文件: {path} <=> {md5_dict[file_md5]}')
+                            if self.is_delete_dup:
+                                del_count = del_count + 1
+                                del_file(path)
+                            continue
+
+                        # 第二层：感知哈希比对
+                        img_phash = get_image_phash(path)
+                        for existing_phash in phash_dict:
+                            if img_phash - existing_phash < 5:  # 汉明距离阈值
+                                dup_count = dup_count + 1
+                                # print(f'相似图片: {path} ≈ {phash_dict[existing_phash]}')
+                                self.log_signal.emit(f'相似图片: {path} ≈ {phash_dict[existing_phash]}')
+                                if self.is_delete_dup:
+                                    del_count = del_count + 1
+                                    del_file(path)
+                                break
+                        else:
+                            phash_dict[img_phash] = path
+                        md5_dict[file_md5] = path
+                    except Exception as e:
+                        print(f'处理失败 {path}: {str(e)}')
+                        self.finish_signal.emit(False, f"去重异常：{str(e)}")
+        if self.is_delete_dup and dup_count > 0:
+            self.finish_signal.emit(True,
+                               f"去重完成！满足条件的图片共 {conform_count} 共检测到 {dup_count + 1} 张重复图片，已删除 {dup_count} 张，保留1张")
+        elif dup_count > 0:
+            self.finish_signal.emit(True,
+                               f"去重完成！满足条件的图片共 {conform_count} 共检测到 {dup_count + 1} 张重复图片（未删除）")
+        else:
+            self.finish_signal.emit(True, f"去重完成！满足条件的图片共 {conform_count} 未检测到重复图片")
+
     def run(self):
         try:
             # 模拟去重流程
-            self.log_signal.emit("🔍 正在扫描文件夹内的图片...")
-            time.sleep(1)
-
-            # 模拟获取图片列表
-            image_ext = ['.png', '.jpg', '.jpeg', '.webp']
-            image_files = [f for f in os.listdir(self.folder_path)
-                           if os.path.splitext(f)[1].lower() in image_ext]
-            self.log_signal.emit(f"📊 扫描到 {len(image_files)} 张图片")
-            time.sleep(1)
-
-            # 模拟重复图片检测
-            self.log_signal.emit("🧮 正在检测重复图片...")
-            time.sleep(2)
-            dup_count = 5 if len(image_files) > 0 else 0  # 模拟5张重复
-
-            if self.is_delete_dup and dup_count > 0:
-                self.log_signal.emit(f"🗑️ 正在删除 {dup_count - 1} 张重复图片（保留1张）...")
-                time.sleep(1)
-                self.finish_signal.emit(True,
-                                        f"去重完成！共检测到 {dup_count} 张重复图片，已删除 {dup_count - 1} 张，保留1张")
-            elif dup_count > 0:
-                self.finish_signal.emit(True, f"去重完成！共检测到 {dup_count} 张重复图片（未删除）")
-            else:
-                self.finish_signal.emit(True, "去重完成！未检测到重复图片")
+            self.log_signal.emit("🔍 正在检测文件夹内的png、jpg、jpeg重复图片")
+            self.find_duplicates()
         except Exception as e:
             self.finish_signal.emit(False, f"去重异常：{str(e)}")
 
