@@ -10,7 +10,7 @@ Qt Designer 可视化开发：
 
 打包为可执行文件：用 PyInstaller 将代码打包为 exe（Windows）/app（Mac）/ 可执行文件（Linux），
 无需安装 Python 环境即可运行：
-![img.png](img.png)
+![img.png](test/img.png)
 
 pip install pyinstaller
 

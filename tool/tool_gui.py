@@ -914,6 +914,27 @@ class MainWindow(QMainWindow):
         self.image_submenu_widget.setVisible(False)
         self.left_layout.addWidget(self.image_submenu_widget)
 
+        # 4. 其他工具菜单组
+        self.other_tool_btn = self.create_main_menu_btn("其他工具")
+        self.other_tool_btn.clicked.connect(self.toggle_video_submenu)
+        self.left_layout.addWidget(self.other_tool_btn)
+        self.all_menu_btns.append(self.other_tool_btn)
+
+        # 其他工具二级菜单容器
+        self.oher_tool_submenu_widget = QWidget()
+        self.oher_tool_submenu_layout = QVBoxLayout(self.oher_tool_submenu_widget)
+        self.oher_tool_submenu_layout.setContentsMargins(20, 0, 0, 0)
+        self.oher_tool_submenu_layout.setSpacing(0)
+
+        # 其他工具二级菜单-个性闹钟
+        self.oher_tool_alarm_frame_btn = self.create_sub_menu_btn("个性闹钟")
+        self.oher_tool_alarm_frame_btn.clicked.connect(lambda: [
+            self.stacked_widget.setCurrentWidget(self.video_frame_page),
+            self.set_selected_btn(self.oher_tool_alarm_frame_btn)
+        ])
+        self.oher_tool_submenu_layout.addWidget(self.oher_tool_alarm_frame_btn)
+        self.all_menu_btns.append(self.oher_tool_alarm_frame_btn)
+
         # 填充空白
         self.left_layout.addStretch()
 
