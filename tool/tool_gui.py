@@ -1,13 +1,15 @@
 import sys
 import time
 import os
+import datetime
+import threading
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QPushButton, QStackedWidget, QLabel, QFileDialog, QMessageBox,
-    QTextEdit, QGroupBox, QSizePolicy, QCheckBox
+    QTextEdit, QGroupBox, QSizePolicy, QCheckBox, QLineEdit, QGridLayout
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal, QMetaObject, Q_ARG
-from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtCore import Qt, QThread, pyqtSignal, QMetaObject, Q_ARG, QTimer
+from PyQt5.QtGui import QFont, QColor, QIntValidator
 
 # ====================== 统一样式常量（便于维护） ======================
 PAGE_STYLE = "background-color: #ECF0F1; color: black;"  # 页面基础样式
@@ -663,7 +665,7 @@ class ImageDeduplicationPage(QWidget):
             self.btn_run.setDisabled(False)
             self.btn_run.setText("开始去重")
             QApplication.processEvents()
-
+#图片其他页面
 class ImageProcessPage(QWidget):
     """图片处理页面（统一样式）"""
     def __init__(self):
@@ -700,6 +702,608 @@ class ImageProcessPage(QWidget):
         desc.setMaximumWidth(800)
         layout.addWidget(desc)
 
+#文件或着文件夹大小工具页面
+class FileSizeToolPage(QWidget):
+    """文件大小工具页面"""
+
+    def __init__(self):
+        super().__init__()
+        self.selected_path = ""
+        self.size_thread = None
+        self.init_ui()
+
+    def init_ui(self):
+        self.setStyleSheet(PAGE_STYLE)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(40, 30, 40, 30)
+        main_layout.setSpacing(20)
+
+        # 1. 标题 + 功能介绍
+        title_group = QWidget()
+        title_layout = QVBoxLayout(title_group)
+        title_layout.setContentsMargins(0, 0, 0, 0)
+        title_layout.setAlignment(Qt.AlignCenter)
+
+        page_title = QLabel("文件大小工具")
+        page_title.setFont(TITLE_FONT)
+        page_title.setStyleSheet("color: black; margin-bottom: 8px;")
+        page_title.setAlignment(Qt.AlignCenter)
+        title_layout.addWidget(page_title)
+
+        page_desc = QLabel("""
+        功能说明：统计指定文件或文件夹的大小，支持递归统计文件夹内所有文件总大小。
+        使用步骤：1.选择文件/文件夹 → 2.点击判断大小 → 3.查看大小统计日志
+        """)
+        page_desc.setFont(DESC_FONT)
+        page_desc.setWordWrap(True)
+        page_desc.setStyleSheet("color: #333333; line-height: 1.4;")
+        page_desc.setAlignment(Qt.AlignCenter)
+        page_desc.setMaximumWidth(800)
+        title_layout.addWidget(page_desc)
+
+        main_layout.addWidget(title_group)
+
+        # 2. 文件/文件夹选择区域
+        file_group = QGroupBox("路径选择")
+        file_group.setStyleSheet("""
+            QGroupBox {
+                font: bold 14px 微软雅黑;
+                color: black;
+                border: 1px solid #DDDDDD;
+                border-radius: 8px;
+                padding: 15px;
+                margin-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 8px 0 8px;
+            }
+        """)
+        file_layout = QVBoxLayout(file_group)
+        file_layout.setSpacing(15)
+        file_layout.setContentsMargins(10, 10, 10, 10)
+        file_layout.setAlignment(Qt.AlignCenter)
+
+        # 路径选择行（支持文件/文件夹）
+        path_row = QWidget()
+        path_row_layout = QHBoxLayout(path_row)
+        path_row_layout.setSpacing(10)
+        path_row_layout.setAlignment(Qt.AlignCenter)
+        path_row_layout.setContentsMargins(0, 0, 0, 0)
+
+        # 选择文件按钮
+        self.btn_file = QPushButton("选择文件")
+        self.btn_file.setFixedSize(100, 35)
+        self.btn_file.setFont(BUTTON_FONT)
+        self.btn_file.setStyleSheet("""
+            QPushButton {
+                background-color: #3498DB;
+                color: white;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #2980B9;
+            }
+        """)
+        self.btn_file.clicked.connect(self.select_file)
+        path_row_layout.addWidget(self.btn_file)
+
+        # 选择文件夹按钮
+        self.btn_folder = QPushButton("选择文件夹")
+        self.btn_folder.setFixedSize(100, 35)
+        self.btn_folder.setFont(BUTTON_FONT)
+        self.btn_folder.setStyleSheet("""
+            QPushButton {
+                background-color: #3498DB;
+                color: white;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #2980B9;
+            }
+        """)
+        self.btn_folder.clicked.connect(self.select_folder)
+        path_row_layout.addWidget(self.btn_folder)
+
+        self.lbl_path = QLabel("未选择文件/文件夹")
+        self.lbl_path.setFont(DESC_FONT)
+        self.lbl_path.setStyleSheet("color: black;")
+        self.lbl_path.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.lbl_path.setMaximumWidth(400)
+        path_row_layout.addWidget(self.lbl_path)
+
+        file_layout.addWidget(path_row)
+
+        main_layout.addWidget(file_group)
+
+        # 3. 操作按钮区域
+        btn_row = QWidget()
+        btn_row_layout = QHBoxLayout(btn_row)
+        btn_row_layout.setAlignment(Qt.AlignCenter)
+        btn_row_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.btn_calc = QPushButton("判断大小")
+        self.btn_calc.setFixedSize(120, 40)
+        self.btn_calc.setFont(QFont("微软雅黑", 12, QFont.Bold))
+        self.btn_calc.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #45A049;
+            }
+            QPushButton:disabled {
+                background-color: #95A5A6;
+                color: #EEEEEE;
+                border: 1px solid #7F8C8D;
+                cursor: not-allowed;
+            }
+        """)
+        self.btn_calc.clicked.connect(self.calc_size)
+        btn_row_layout.addWidget(self.btn_calc)
+
+        main_layout.addWidget(btn_row)
+
+        # 4. 日志输出框
+        log_group = QGroupBox("大小统计日志")
+        log_group.setStyleSheet("""
+            QGroupBox {
+                font: bold 14px 微软雅黑;
+                color: black;
+                border: 1px solid #DDDDDD;
+                border-radius: 8px;
+                padding: 10px;
+                margin-top: 5px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 8px 0 8px;
+            }
+        """)
+        log_layout = QVBoxLayout(log_group)
+        log_layout.setContentsMargins(5, 5, 5, 5)
+
+        self.log_text = QTextEdit()
+        self.log_text.setReadOnly(True)
+        self.log_text.setFont(LOG_FONT)
+        self.log_text.setStyleSheet("""
+            QTextEdit {
+                background-color: white;
+                color: black;
+                border: 1px solid #DDDDDD;
+                border-radius: 5px;
+                padding: 8px;
+            }
+        """)
+        self.log_text.setMinimumHeight(200)
+        log_layout.addWidget(self.log_text)
+
+        main_layout.addWidget(log_group, stretch=1)
+
+    def select_file(self):
+        """选择单个文件"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择文件",
+            "",
+            "所有文件 (*.*)"
+        )
+        if file_path:
+            self.selected_path = file_path
+            self.lbl_path.setText(f"已选文件：{os.path.basename(file_path)}")
+            self.append_log(f"✅ 选择文件：{file_path}")
+
+    def select_folder(self):
+        """选择文件夹"""
+        folder_path = QFileDialog.getExistingDirectory(self, "选择文件夹")
+        if folder_path:
+            self.selected_path = folder_path
+            self.lbl_path.setText(f"已选文件夹：{folder_path}")
+            self.append_log(f"✅ 选择文件夹：{folder_path}")
+
+    def append_log(self, msg):
+        """追加日志"""
+        from datetime import datetime
+        timestamp = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+        full_msg = f"{timestamp} {msg}"
+
+        QMetaObject.invokeMethod(
+            self.log_text,
+            "append",
+            Qt.QueuedConnection,
+            Q_ARG(str, full_msg)
+        )
+        QMetaObject.invokeMethod(
+            self.log_text.verticalScrollBar(),
+            "setValue",
+            Qt.QueuedConnection,
+            Q_ARG(int, self.log_text.verticalScrollBar().maximum())
+        )
+
+    def calc_size(self):
+        """计算文件/文件夹大小"""
+        if not self.selected_path:
+            QMessageBox.warning(self, "提示", "请先选择文件或文件夹！")
+            return
+
+        self.btn_calc.setDisabled(True)
+        self.btn_calc.setText("计算中...")
+        QApplication.processEvents()
+
+        self.append_log("📌 开始统计文件/文件夹大小...")
+
+        try:
+            self.size_thread = FileSizeThread(self.selected_path)
+            self.size_thread.log_signal.connect(self.append_log)
+            self.size_thread.finish_signal.connect(self.on_calc_finish)
+            self.size_thread.start()
+        except Exception as e:
+            self.append_log(f"❌ 线程启动失败：{str(e)}")
+            self.ensure_btn_enabled()
+
+    def on_calc_finish(self, success, msg):
+        """计算完成回调"""
+        self.btn_calc.setDisabled(False)
+        self.btn_calc.setText("判断大小")
+        QApplication.processEvents()
+
+        if success:
+            self.append_log(f"🎉 统计完成：{msg}")
+            QMessageBox.information(self, "成功", msg)
+        else:
+            self.append_log(f"❌ 统计失败：{msg}")
+            QMessageBox.critical(self, "失败", msg)
+
+    def ensure_btn_enabled(self):
+        """兜底恢复按钮"""
+        if self.btn_calc.isDisabled():
+            self.btn_calc.setDisabled(False)
+            self.btn_calc.setText("判断大小")
+            QApplication.processEvents()
+
+
+#智能闹钟工具页面
+class SmartAlarmPage(QWidget):
+    """智能闹钟工具页面"""
+
+    def __init__(self):
+        super().__init__()
+        self.alarm_thread = None
+        self.alarm_active = False
+        self.init_ui()
+
+    def init_ui(self):
+        self.setStyleSheet(PAGE_STYLE)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(40, 30, 40, 30)
+        main_layout.setSpacing(20)
+
+        # 1. 标题 + 功能介绍
+        title_group = QWidget()
+        title_layout = QVBoxLayout(title_group)
+        title_layout.setContentsMargins(0, 0, 0, 0)
+        title_layout.setAlignment(Qt.AlignCenter)
+
+        page_title = QLabel("智能闹钟工具")
+        page_title.setFont(TITLE_FONT)
+        page_title.setStyleSheet("color: black; margin-bottom: 8px;")
+        page_title.setAlignment(Qt.AlignCenter)
+        title_layout.addWidget(page_title)
+
+        page_desc = QLabel("""
+        功能说明：设置指定时间的闹钟提醒，支持自定义提醒内容，到点自动弹窗提示。
+        使用步骤：1.设置年月日时分 → 2.输入提醒内容 → 3.点击确定闹钟 → 4.等待提醒（可终止）
+        """)
+        page_desc.setFont(DESC_FONT)
+        page_desc.setWordWrap(True)
+        page_desc.setStyleSheet("color: #333333; line-height: 1.4;")
+        page_desc.setAlignment(Qt.AlignCenter)
+        page_desc.setMaximumWidth(800)
+        title_layout.addWidget(page_desc)
+
+        main_layout.addWidget(title_group)
+
+        # 2. 闹钟设置区域
+        alarm_group = QGroupBox("闹钟设置")
+        alarm_group.setStyleSheet("""
+            QGroupBox {
+                font: bold 14px 微软雅黑;
+                color: black;
+                border: 1px solid #DDDDDD;
+                border-radius: 8px;
+                padding: 15px;
+                margin-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 8px 0 8px;
+            }
+        """)
+        alarm_layout = QVBoxLayout(alarm_group)
+        alarm_layout.setSpacing(20)
+        alarm_layout.setContentsMargins(10, 10, 10, 10)
+        alarm_layout.setAlignment(Qt.AlignCenter)
+
+        # 时间输入网格
+        time_grid = QWidget()
+        time_grid_layout = QGridLayout(time_grid)
+        time_grid_layout.setSpacing(10)
+        time_grid_layout.setContentsMargins(0, 0, 0, 0)
+        time_grid_layout.setAlignment(Qt.AlignCenter)
+
+        # 获取当前时间
+        now = datetime.datetime.now()
+        year, month, day = now.year, now.month, now.day
+        hour, minute = now.hour, now.minute
+
+        # 年输入框
+        lbl_year = QLabel("年：")
+        lbl_year.setFont(DESC_FONT)
+        self.le_year = QLineEdit(str(year))
+        self.le_year.setFixedWidth(80)
+        self.le_year.setFont(DESC_FONT)
+        self.le_year.setValidator(QIntValidator(2000, 2100))
+        time_grid_layout.addWidget(lbl_year, 0, 0)
+        time_grid_layout.addWidget(self.le_year, 0, 1)
+
+        # 月输入框
+        lbl_month = QLabel("月：")
+        lbl_month.setFont(DESC_FONT)
+        self.le_month = QLineEdit(str(month))
+        self.le_month.setFixedWidth(80)
+        self.le_month.setFont(DESC_FONT)
+        self.le_month.setValidator(QIntValidator(1, 12))
+        time_grid_layout.addWidget(lbl_month, 0, 2)
+        time_grid_layout.addWidget(self.le_month, 0, 3)
+
+        # 日输入框
+        lbl_day = QLabel("日：")
+        lbl_day.setFont(DESC_FONT)
+        self.le_day = QLineEdit(str(day))
+        self.le_day.setFixedWidth(80)
+        self.le_day.setFont(DESC_FONT)
+        self.le_day.setValidator(QIntValidator(1, 31))
+        time_grid_layout.addWidget(lbl_day, 0, 4)
+        time_grid_layout.addWidget(self.le_day, 0, 5)
+
+        # 时输入框
+        lbl_hour = QLabel("时：")
+        lbl_hour.setFont(DESC_FONT)
+        self.le_hour = QLineEdit(str(hour))
+        self.le_hour.setFixedWidth(80)
+        self.le_hour.setFont(DESC_FONT)
+        self.le_hour.setValidator(QIntValidator(0, 23))
+        time_grid_layout.addWidget(lbl_hour, 1, 0)
+        time_grid_layout.addWidget(self.le_hour, 1, 1)
+
+        # 分输入框
+        lbl_minute = QLabel("分：")
+        lbl_minute.setFont(DESC_FONT)
+        self.le_minute = QLineEdit(str(minute))
+        self.le_minute.setFixedWidth(80)
+        self.le_minute.setFont(DESC_FONT)
+        self.le_minute.setValidator(QIntValidator(0, 59))
+        time_grid_layout.addWidget(lbl_minute, 1, 2)
+        time_grid_layout.addWidget(self.le_minute, 1, 3)
+
+        alarm_layout.addWidget(time_grid)
+
+        # 提醒内容输入框
+        content_row = QWidget()
+        content_row_layout = QHBoxLayout(content_row)
+        content_row_layout.setSpacing(10)
+        content_row_layout.setAlignment(Qt.AlignCenter)
+
+        lbl_content = QLabel("提醒内容：")
+        lbl_content.setFont(DESC_FONT)
+        content_row_layout.addWidget(lbl_content)
+
+        self.le_content = QLineEdit()
+        self.le_content.setFixedWidth(400)
+        self.le_content.setFont(DESC_FONT)
+        self.le_content.setPlaceholderText("请输入闹钟提醒内容（如：开会、喝水、休息）")
+        content_row_layout.addWidget(self.le_content)
+
+        alarm_layout.addWidget(content_row)
+
+        main_layout.addWidget(alarm_group)
+
+        # 3. 操作按钮区域
+        btn_row = QWidget()
+        btn_row_layout = QHBoxLayout(btn_row)
+        btn_row_layout.setSpacing(20)
+        btn_row_layout.setAlignment(Qt.AlignCenter)
+        btn_row_layout.setContentsMargins(0, 0, 0, 0)
+
+        # 确定闹钟按钮
+        self.btn_set_alarm = QPushButton("确定闹钟")
+        self.btn_set_alarm.setFixedSize(120, 40)
+        self.btn_set_alarm.setFont(QFont("微软雅黑", 12, QFont.Bold))
+        self.btn_set_alarm.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #45A049;
+            }
+            QPushButton:disabled {
+                background-color: #95A5A6;
+                color: #EEEEEE;
+                border: 1px solid #7F8C8D;
+                cursor: not-allowed;
+            }
+        """)
+        self.btn_set_alarm.clicked.connect(self.set_alarm)
+        btn_row_layout.addWidget(self.btn_set_alarm)
+
+        # 终止闹钟按钮
+        self.btn_stop_alarm = QPushButton("终止闹钟")
+        self.btn_stop_alarm.setFixedSize(120, 40)
+        self.btn_stop_alarm.setFont(QFont("微软雅黑", 12, QFont.Bold))
+        self.btn_stop_alarm.setStyleSheet("""
+            QPushButton {
+                background-color: #F44336;
+                color: white;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #D32F2F;
+            }
+            QPushButton:disabled {
+                background-color: #95A5A6;
+                color: #EEEEEE;
+                border: 1px solid #7F8C8D;
+                cursor: not-allowed;
+            }
+        """)
+        self.btn_stop_alarm.clicked.connect(self.stop_alarm)
+        self.btn_stop_alarm.setDisabled(True)  # 默认禁用
+        btn_row_layout.addWidget(self.btn_stop_alarm)
+
+        main_layout.addWidget(btn_row)
+
+        # 4. 日志输出框
+        log_group = QGroupBox("闹钟日志")
+        log_group.setStyleSheet("""
+            QGroupBox {
+                font: bold 14px 微软雅黑;
+                color: black;
+                border: 1px solid #DDDDDD;
+                border-radius: 8px;
+                padding: 10px;
+                margin-top: 5px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 8px 0 8px;
+            }
+        """)
+        log_layout = QVBoxLayout(log_group)
+        log_layout.setContentsMargins(5, 5, 5, 5)
+
+        self.log_text = QTextEdit()
+        self.log_text.setReadOnly(True)
+        self.log_text.setFont(LOG_FONT)
+        self.log_text.setStyleSheet("""
+            QTextEdit {
+                background-color: white;
+                color: black;
+                border: 1px solid #DDDDDD;
+                border-radius: 5px;
+                padding: 8px;
+            }
+        """)
+        self.log_text.setMinimumHeight(200)
+        log_layout.addWidget(self.log_text)
+
+        main_layout.addWidget(log_group, stretch=1)
+
+    def append_log(self, msg):
+        """追加日志"""
+        from datetime import datetime
+        timestamp = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+        full_msg = f"{timestamp} {msg}"
+
+        QMetaObject.invokeMethod(
+            self.log_text,
+            "append",
+            Qt.QueuedConnection,
+            Q_ARG(str, full_msg)
+        )
+        QMetaObject.invokeMethod(
+            self.log_text.verticalScrollBar(),
+            "setValue",
+            Qt.QueuedConnection,
+            Q_ARG(int, self.log_text.verticalScrollBar().maximum())
+        )
+
+    def set_alarm(self):
+        """设置闹钟"""
+        # 校验输入
+        try:
+            year = int(self.le_year.text())
+            month = int(self.le_month.text())
+            day = int(self.le_day.text())
+            hour = int(self.le_hour.text())
+            minute = int(self.le_minute.text())
+            content = self.le_content.text().strip() or "无提醒内容"
+        except ValueError:
+            QMessageBox.warning(self, "提示", "请输入有效的年月日时分！")
+            return
+
+        # 校验日期合法性
+        try:
+            alarm_time = datetime.datetime(year, month, day, hour, minute)
+        except ValueError:
+            QMessageBox.warning(self, "提示", "输入的日期时间不合法！")
+            return
+
+        # 校验时间是否在未来
+        now = datetime.datetime.now()
+        if alarm_time < now:
+            reply = QMessageBox.question(
+                self,
+                "提示",
+                "设置的时间已过去，是否继续？",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if reply == QMessageBox.No:
+                return
+
+        # 启动闹钟线程
+        self.alarm_active = True
+        self.btn_set_alarm.setDisabled(True)
+        self.btn_stop_alarm.setDisabled(False)
+        self.append_log(f"📌 开始设置闹钟：{alarm_time.strftime('%Y-%m-%d %H:%M')}")
+        self.append_log(f"📝 提醒内容：{content}")
+
+        self.alarm_thread = AlarmThread(alarm_time, content)
+        self.alarm_thread.log_signal.connect(self.append_log)
+        self.alarm_thread.finish_signal.connect(self.on_alarm_finish)
+        self.alarm_thread.start()
+
+    def stop_alarm(self):
+        """终止闹钟"""
+        if self.alarm_active and self.alarm_thread:
+            self.alarm_active = False
+            self.alarm_thread.terminate()
+            self.btn_set_alarm.setDisabled(False)
+            self.btn_stop_alarm.setDisabled(True)
+            self.append_log("🛑 已终止当前闹钟")
+            QMessageBox.information(self, "提示", "已终止当前闹钟！")
+
+    def on_alarm_finish(self, is_triggered, msg):
+        """闹钟完成回调"""
+        self.alarm_active = False
+        self.btn_set_alarm.setDisabled(False)
+        self.btn_stop_alarm.setDisabled(True)
+
+        if is_triggered:
+            self.append_log(f"⏰ {msg}")
+            # 弹窗提醒
+            QMessageBox.information(
+                self,
+                "闹钟提醒",
+                f"{msg}\n\n提醒内容：{self.le_content.text().strip() or '无提醒内容'}"
+            )
+        else:
+            self.append_log(f"❌ {msg}")
+
+#===========================线程=============================
 #视频提取线程
 class ExtractThread(QThread):
     log_signal = pyqtSignal(str)
@@ -805,32 +1409,111 @@ class ImageDedupThread(QThread):
         except Exception as e:
             self.finish_signal.emit(False, f"去重异常：{str(e)}")
 
+#文件大小线程
+class FileSizeThread(QThread):
+    """文件大小统计线程"""
+    log_signal = pyqtSignal(str)
+    finish_signal = pyqtSignal(bool, str)
+
+    def __init__(self, path):
+        super().__init__()
+        self.path = path
+
+    def get_size(self, path):
+        """递归计算文件/文件夹大小"""
+        total_size = 0
+        if os.path.isfile(path):
+            total_size = os.path.getsize(path)
+            self.log_signal.emit(f"📄 文件 {os.path.basename(path)} 大小：{total_size / 1024 / 1024:.2f} MB")
+        else:
+            self.log_signal.emit(f"📁 开始递归统计文件夹 {path}...")
+            for root, dirs, files in os.walk(path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    try:
+                        file_size = os.path.getsize(file_path)
+                        total_size += file_size
+                    except Exception as e:
+                        self.log_signal.emit(f"⚠️ 无法读取 {file_path} 大小：{str(e)}")
+        return total_size
+
+    def run(self):
+        try:
+            total_size = self.get_size(self.path)
+            # 单位转换
+            if total_size < 1024:
+                size_str = f"{total_size} 字节"
+            elif total_size < 1024 * 1024:
+                size_str = f"{total_size / 1024:.2f} KB"
+            elif total_size < 1024 * 1024 * 1024:
+                size_str = f"{total_size / 1024 / 1024:.2f} MB"
+            else:
+                size_str = f"{total_size / 1024 / 1024 / 1024:.2f} GB"
+
+            if os.path.isfile(self.path):
+                self.finish_signal.emit(True, f"文件 {os.path.basename(self.path)} 大小：{size_str}")
+            else:
+                self.finish_signal.emit(True, f"文件夹 {self.path} 总大小：{size_str}")
+
+        except Exception as e:
+            self.finish_signal.emit(False, f"统计异常：{str(e)}")
+
+#闹钟线程
+class AlarmThread(QThread):
+    """闹钟线程"""
+    log_signal = pyqtSignal(str)
+    finish_signal = pyqtSignal(bool, str)  # is_triggered, msg
+
+    def __init__(self, alarm_time, content):
+        super().__init__()
+        self.alarm_time = alarm_time
+        self.content = content
+
+    def run(self):
+        try:
+            now = datetime.datetime.now()
+            diff = (self.alarm_time - now).total_seconds()
+
+            if diff > 0:
+                self.log_signal.emit(
+                    f"⏳ 距离闹钟时间还有 {int(diff // 3600)} 小时 {int((diff % 3600) // 60)} 分钟 {int(diff % 60)} 秒")
+                # 分阶段输出倒计时
+                while diff > 0:
+                    time.sleep(1)
+                    diff -= 1
+                    if diff % 60 == 0:  # 每分钟输出一次
+                        self.log_signal.emit(f"⏳ 剩余时间：{int(diff // 3600)} 小时 {int((diff % 3600) // 60)} 分钟")
+
+            self.finish_signal.emit(True, f"已到设置时间：{self.alarm_time.strftime('%Y-%m-%d %H:%M')}！{self.content}")
+
+        except Exception as e:
+            self.finish_signal.emit(False, f"闹钟异常：{str(e)}")
+
+
 # ====================== 主窗口（复用逻辑） ======================
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.video_menu_expanded = False
         self.image_menu_expanded = False
+        self.other_menu_expanded = False  # 新增其他工具菜单展开状态
         self.current_selected_btn = None
         self.all_menu_btns = []
         self.init_main_ui()
 
     def init_main_ui(self):
-        # 窗口基础设置
         self.setWindowTitle("多媒体工具集")
         self.setGeometry(100, 100, 1100, 700)
         self.setMinimumSize(900, 600)
 
-        # 中心部件
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
-        # 整体布局
         main_layout = QHBoxLayout(central_widget)
         main_layout.setSpacing(0)
         main_layout.setContentsMargins(0, 0, 0, 0)
 
-        # ---------------------- 左侧菜单栏 ----------------------
+        # 左侧菜单栏
         left_menu_widget = QWidget()
         left_menu_widget.setStyleSheet("background-color: #2C3E50;")
         left_menu_widget.setFixedWidth(200)
@@ -839,7 +1522,7 @@ class MainWindow(QMainWindow):
         self.left_layout.setSpacing(0)
         self.left_layout.setAlignment(Qt.AlignTop)
 
-        # 1. 首页菜单
+        # 首页菜单
         self.home_btn = self.create_main_menu_btn("首页")
         self.home_btn.clicked.connect(lambda: [
             self.stacked_widget.setCurrentWidget(self.home_page),
@@ -848,8 +1531,8 @@ class MainWindow(QMainWindow):
         self.left_layout.addWidget(self.home_btn)
         self.all_menu_btns.append(self.home_btn)
 
-        # 2. 视频菜单组
-        self.video_btn = self.create_main_menu_btn("视频")
+        # 视频菜单组
+        self.video_btn = self.create_main_menu_btn("视频 ▼")
         self.video_btn.clicked.connect(self.toggle_video_submenu)
         self.left_layout.addWidget(self.video_btn)
         self.all_menu_btns.append(self.video_btn)
@@ -881,8 +1564,8 @@ class MainWindow(QMainWindow):
         self.video_submenu_widget.setVisible(False)
         self.left_layout.addWidget(self.video_submenu_widget)
 
-        # 3. 图片菜单组
-        self.image_btn = self.create_main_menu_btn("图片")
+        # 图片菜单组
+        self.image_btn = self.create_main_menu_btn("图片 ▼")
         self.image_btn.clicked.connect(self.toggle_image_submenu)
         self.left_layout.addWidget(self.image_btn)
         self.all_menu_btns.append(self.image_btn)
@@ -914,31 +1597,43 @@ class MainWindow(QMainWindow):
         self.image_submenu_widget.setVisible(False)
         self.left_layout.addWidget(self.image_submenu_widget)
 
-        # 4. 其他工具菜单组
-        self.other_tool_btn = self.create_main_menu_btn("其他工具")
-        self.other_tool_btn.clicked.connect(self.toggle_video_submenu)
-        self.left_layout.addWidget(self.other_tool_btn)
-        self.all_menu_btns.append(self.other_tool_btn)
+        # 新增：其他工具菜单组
+        self.other_btn = self.create_main_menu_btn("其他工具 ▼")
+        self.other_btn.clicked.connect(self.toggle_other_submenu)
+        self.left_layout.addWidget(self.other_btn)
+        self.all_menu_btns.append(self.other_btn)
 
         # 其他工具二级菜单容器
-        self.oher_tool_submenu_widget = QWidget()
-        self.oher_tool_submenu_layout = QVBoxLayout(self.oher_tool_submenu_widget)
-        self.oher_tool_submenu_layout.setContentsMargins(20, 0, 0, 0)
-        self.oher_tool_submenu_layout.setSpacing(0)
+        self.other_submenu_widget = QWidget()
+        self.other_submenu_layout = QVBoxLayout(self.other_submenu_widget)
+        self.other_submenu_layout.setContentsMargins(20, 0, 0, 0)
+        self.other_submenu_layout.setSpacing(0)
 
-        # 其他工具二级菜单-个性闹钟
-        self.oher_tool_alarm_frame_btn = self.create_sub_menu_btn("个性闹钟")
-        self.oher_tool_alarm_frame_btn.clicked.connect(lambda: [
-            self.stacked_widget.setCurrentWidget(self.video_frame_page),
-            self.set_selected_btn(self.oher_tool_alarm_frame_btn)
+        # 其他工具二级菜单-文件大小工具
+        self.file_size_btn = self.create_sub_menu_btn("文件大小工具")
+        self.file_size_btn.clicked.connect(lambda: [
+            self.stacked_widget.setCurrentWidget(self.file_size_page),
+            self.set_selected_btn(self.file_size_btn)
         ])
-        self.oher_tool_submenu_layout.addWidget(self.oher_tool_alarm_frame_btn)
-        self.all_menu_btns.append(self.oher_tool_alarm_frame_btn)
+        self.other_submenu_layout.addWidget(self.file_size_btn)
+        self.all_menu_btns.append(self.file_size_btn)
+
+        # 其他工具二级菜单-智能闹钟工具
+        self.alarm_btn = self.create_sub_menu_btn("智能闹钟工具")
+        self.alarm_btn.clicked.connect(lambda: [
+            self.stacked_widget.setCurrentWidget(self.alarm_page),
+            self.set_selected_btn(self.alarm_btn)
+        ])
+        self.other_submenu_layout.addWidget(self.alarm_btn)
+        self.all_menu_btns.append(self.alarm_btn)
+
+        self.other_submenu_widget.setVisible(False)
+        self.left_layout.addWidget(self.other_submenu_widget)
 
         # 填充空白
         self.left_layout.addStretch()
 
-        # ---------------------- 右侧内容区 ----------------------
+        # 右侧内容区
         self.stacked_widget = QStackedWidget()
         self.stacked_widget.setStyleSheet("background-color: #ECF0F1;")
 
@@ -948,12 +1643,16 @@ class MainWindow(QMainWindow):
         self.video_other_page = VideoOtherToolsPage()
         self.image_dedup_page = ImageDeduplicationPage()
         self.image_process_page = ImageProcessPage()
+        self.file_size_page = FileSizeToolPage()  # 新增文件大小页面
+        self.alarm_page = SmartAlarmPage()        # 新增智能闹钟页面
 
         self.stacked_widget.addWidget(self.home_page)
         self.stacked_widget.addWidget(self.video_frame_page)
         self.stacked_widget.addWidget(self.video_other_page)
         self.stacked_widget.addWidget(self.image_dedup_page)
         self.stacked_widget.addWidget(self.image_process_page)
+        self.stacked_widget.addWidget(self.file_size_page)
+        self.stacked_widget.addWidget(self.alarm_page)
 
         # 组装布局
         main_layout.addWidget(left_menu_widget)
@@ -964,7 +1663,6 @@ class MainWindow(QMainWindow):
         self.stacked_widget.setCurrentWidget(self.home_page)
 
     def create_main_menu_btn(self, text):
-        """创建一级菜单按钮"""
         btn = QPushButton(text)
         btn.setFixedWidth(200)
         btn.setMinimumHeight(50)
@@ -991,7 +1689,6 @@ class MainWindow(QMainWindow):
         return btn
 
     def create_sub_menu_btn(self, text):
-        """创建二级菜单按钮"""
         btn = QPushButton(text)
         btn.setFixedWidth(180)
         btn.setMinimumHeight(40)
@@ -1019,23 +1716,28 @@ class MainWindow(QMainWindow):
         return btn
 
     def toggle_video_submenu(self):
-        """切换视频二级菜单"""
         self.video_menu_expanded = not self.video_menu_expanded
         self.video_submenu_widget.setVisible(self.video_menu_expanded)
-        self.video_btn.setText("视频" if self.video_menu_expanded else "视频")
+        self.video_btn.setText("视频 ▲" if self.video_menu_expanded else "视频 ▼")
         if self.video_menu_expanded and not any([self.video_frame_btn.isChecked(), self.video_other_btn.isChecked()]):
             self.set_selected_btn(self.video_btn)
 
     def toggle_image_submenu(self):
-        """切换图片二级菜单"""
         self.image_menu_expanded = not self.image_menu_expanded
         self.image_submenu_widget.setVisible(self.image_menu_expanded)
-        self.image_btn.setText("图片" if self.image_menu_expanded else "图片")
+        self.image_btn.setText("图片 ▲" if self.image_menu_expanded else "图片 ▼")
         if self.image_menu_expanded and not any([self.image_dedup_btn.isChecked(), self.image_process_btn.isChecked()]):
             self.set_selected_btn(self.image_btn)
 
+    # 新增：其他工具菜单展开/收起
+    def toggle_other_submenu(self):
+        self.other_menu_expanded = not self.other_menu_expanded
+        self.other_submenu_widget.setVisible(self.other_menu_expanded)
+        self.other_btn.setText("其他工具 ▲" if self.other_menu_expanded else "其他工具 ▼")
+        if self.other_menu_expanded and not any([self.file_size_btn.isChecked(), self.alarm_btn.isChecked()]):
+            self.set_selected_btn(self.other_btn)
+
     def set_selected_btn(self, target_btn):
-        """设置选中按钮高亮"""
         for btn in self.all_menu_btns:
             if btn != target_btn:
                 btn.setChecked(False)
