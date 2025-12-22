@@ -998,9 +998,9 @@ class SmartAlarmPage(QWidget):
         title_layout.addWidget(page_title)
 
         page_desc = QLabel("""
-        功能说明：设置指定时间的闹钟提醒，支持自定义提醒内容，到点自动弹窗提示。
-        使用步骤：1.设置年月日时分 → 2.输入提醒内容 → 3.点击确定闹钟 → 4.等待提醒（可终止）
-        """)
+                功能说明：设置指定时间的闹钟提醒，支持自定义提醒内容，到点自动弹窗提示。
+                使用步骤：1.设置年月日时分 → 2.输入提醒内容 → 3.点击确定闹钟 → 4.等待提醒（可终止）
+                """)
         page_desc.setFont(DESC_FONT)
         page_desc.setWordWrap(True)
         page_desc.setStyleSheet("color: #333333; line-height: 1.4;")
@@ -1032,74 +1032,76 @@ class SmartAlarmPage(QWidget):
         alarm_layout.setContentsMargins(10, 10, 10, 10)
         alarm_layout.setAlignment(Qt.AlignCenter)
 
-        # 时间输入网格
+        # 时间输入网格 - 核心修改：减小控件间距，调整输入框宽度
         time_grid = QWidget()
         time_grid_layout = QGridLayout(time_grid)
-        time_grid_layout.setSpacing(10)
+        time_grid_layout.setSpacing(0)  # 先重置全局间距
         time_grid_layout.setContentsMargins(0, 0, 0, 0)
         time_grid_layout.setAlignment(Qt.AlignCenter)
 
-        # 获取当前时间
         now = datetime.datetime.now()
         year, month, day = now.year, now.month, now.day
         hour, minute = now.hour, now.minute
 
-        # 年输入框
+        # 年：标签与输入框紧贴，输入框与月标签间距加大
         lbl_year = QLabel("年：")
         lbl_year.setFont(DESC_FONT)
         self.le_year = QLineEdit(str(year))
-        self.le_year.setFixedWidth(80)
+        self.le_year.setFixedWidth(60)
         self.le_year.setFont(DESC_FONT)
         self.le_year.setValidator(QIntValidator(2000, 2100))
         time_grid_layout.addWidget(lbl_year, 0, 0)
         time_grid_layout.addWidget(self.le_year, 0, 1)
+        time_grid_layout.setColumnMinimumWidth(2, 240)  # 年输入框与月标签之间加20px空白
 
-        # 月输入框
+        # 月：
         lbl_month = QLabel("月：")
         lbl_month.setFont(DESC_FONT)
         self.le_month = QLineEdit(str(month))
-        self.le_month.setFixedWidth(80)
+        self.le_month.setFixedWidth(60)
         self.le_month.setFont(DESC_FONT)
         self.le_month.setValidator(QIntValidator(1, 12))
-        time_grid_layout.addWidget(lbl_month, 0, 2)
-        time_grid_layout.addWidget(self.le_month, 0, 3)
+        time_grid_layout.addWidget(lbl_month, 0, 3)
+        time_grid_layout.addWidget(self.le_month, 0, 4)
+        time_grid_layout.setColumnMinimumWidth(5, 240)  # 月输入框与日标签之间加20px空白
 
-        # 日输入框
+        # 日：
         lbl_day = QLabel("日：")
         lbl_day.setFont(DESC_FONT)
         self.le_day = QLineEdit(str(day))
-        self.le_day.setFixedWidth(80)
+        self.le_day.setFixedWidth(60)
         self.le_day.setFont(DESC_FONT)
         self.le_day.setValidator(QIntValidator(1, 31))
-        time_grid_layout.addWidget(lbl_day, 0, 4)
-        time_grid_layout.addWidget(self.le_day, 0, 5)
+        time_grid_layout.addWidget(lbl_day, 0, 6)
+        time_grid_layout.addWidget(self.le_day, 0, 7)
 
-        # 时输入框
+        # 时：
         lbl_hour = QLabel("时：")
         lbl_hour.setFont(DESC_FONT)
         self.le_hour = QLineEdit(str(hour))
-        self.le_hour.setFixedWidth(80)
+        self.le_hour.setFixedWidth(60)
         self.le_hour.setFont(DESC_FONT)
         self.le_hour.setValidator(QIntValidator(0, 23))
         time_grid_layout.addWidget(lbl_hour, 1, 0)
         time_grid_layout.addWidget(self.le_hour, 1, 1)
+        time_grid_layout.setColumnMinimumWidth(2, 240)  # 时输入框与分标签之间加20px空白
 
-        # 分输入框
+        # 分：
         lbl_minute = QLabel("分：")
         lbl_minute.setFont(DESC_FONT)
         self.le_minute = QLineEdit(str(minute))
-        self.le_minute.setFixedWidth(80)
+        self.le_minute.setFixedWidth(60)
         self.le_minute.setFont(DESC_FONT)
         self.le_minute.setValidator(QIntValidator(0, 59))
-        time_grid_layout.addWidget(lbl_minute, 1, 2)
-        time_grid_layout.addWidget(self.le_minute, 1, 3)
+        time_grid_layout.addWidget(lbl_minute, 1, 3)
+        time_grid_layout.addWidget(self.le_minute, 1, 4)
 
         alarm_layout.addWidget(time_grid)
 
-        # 提醒内容输入框
+        # 提醒内容输入框（保留之前的宽度优化，仅调整间距）
         content_row = QWidget()
         content_row_layout = QHBoxLayout(content_row)
-        content_row_layout.setSpacing(10)
+        content_row_layout.setSpacing(2)  # 提醒内容标签与输入框间距缩小为5px
         content_row_layout.setAlignment(Qt.AlignCenter)
 
         lbl_content = QLabel("提醒内容：")
@@ -1107,7 +1109,7 @@ class SmartAlarmPage(QWidget):
         content_row_layout.addWidget(lbl_content)
 
         self.le_content = QLineEdit()
-        self.le_content.setFixedWidth(400)
+        self.le_content.setFixedWidth(550)  # 再增大输入框宽度
         self.le_content.setFont(DESC_FONT)
         self.le_content.setPlaceholderText("请输入闹钟提醒内容（如：开会、喝水、休息）")
         content_row_layout.addWidget(self.le_content)
