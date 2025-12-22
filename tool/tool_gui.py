@@ -1270,8 +1270,8 @@ class SmartAlarmPage(QWidget):
         self.alarm_active = True
         self.btn_set_alarm.setDisabled(True)
         self.btn_stop_alarm.setDisabled(False)
-        self.append_log(f"📌 开始设置闹钟：{alarm_time.strftime('%Y-%m-%d %H:%M')}")
-        self.append_log(f"📝 提醒内容：{content}")
+        self.append_log(f"📌 闹钟已启动，将在 {alarm_time.strftime('%Y-%m-%d %H:%M')} 触发！")
+        self.append_log(f"📝 语音提醒内容：{content}")
 
         self.alarm_thread = AlarmThread(alarm_time, content)
         self.alarm_thread.log_signal.connect(self.append_log)
@@ -1282,7 +1282,8 @@ class SmartAlarmPage(QWidget):
         """终止闹钟"""
         if self.alarm_active and self.alarm_thread:
             self.alarm_active = False
-            self.alarm_thread.terminate()
+            self.alarm_thread.join(timeout=2)  # 等待线程退出
+            # self.alarm_thread.terminate()
             self.btn_set_alarm.setDisabled(False)
             self.btn_stop_alarm.setDisabled(True)
             self.append_log("🛑 已终止当前闹钟")
@@ -1421,42 +1422,23 @@ class FileSizeThread(QThread):
         super().__init__()
         self.path = path
 
-    def get_size(self, path):
-        """递归计算文件/文件夹大小"""
-        total_size = 0
-        if os.path.isfile(path):
-            total_size = os.path.getsize(path)
-            self.log_signal.emit(f"📄 文件 {os.path.basename(path)} 大小：{total_size / 1024 / 1024:.2f} MB")
-        else:
-            self.log_signal.emit(f"📁 开始递归统计文件夹 {path}...")
-            for root, dirs, files in os.walk(path):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    try:
-                        file_size = os.path.getsize(file_path)
-                        total_size += file_size
-                    except Exception as e:
-                        self.log_signal.emit(f"⚠️ 无法读取 {file_path} 大小：{str(e)}")
-        return total_size
-
     def run(self):
         try:
-            total_size = self.get_size(self.path)
-            # 单位转换
-            if total_size < 1024:
-                size_str = f"{total_size} 字节"
-            elif total_size < 1024 * 1024:
-                size_str = f"{total_size / 1024:.2f} KB"
-            elif total_size < 1024 * 1024 * 1024:
-                size_str = f"{total_size / 1024 / 1024:.2f} MB"
-            else:
-                size_str = f"{total_size / 1024 / 1024 / 1024:.2f} GB"
+            from file_size import calculate_path_size
+
+            # 检查路径是否存在
+            if not os.path.exists(self.path):
+                print(f"❌ 路径不存在: {self.path}")
+                self.finish_signal.emit(False,f"❌ 路径不存在: {self.path}")
+                return
+
+            self.log_signal.emit(f"程序处理中，请稍后...")
+            result = calculate_path_size(self.path, True, 31457280)
 
             if os.path.isfile(self.path):
-                self.finish_signal.emit(True, f"文件 {os.path.basename(self.path)} 大小：{size_str}")
+                self.finish_signal.emit(True, f"文件 {os.path.basename(self.path)} 大小：{result}")
             else:
-                self.finish_signal.emit(True, f"文件夹 {self.path} 总大小：{size_str}")
-
+                self.finish_signal.emit(True, f"文件夹 {self.path} 总大小：{result}")
         except Exception as e:
             self.finish_signal.emit(False, f"统计异常：{str(e)}")
 
@@ -1473,24 +1455,16 @@ class AlarmThread(QThread):
 
     def run(self):
         try:
-            now = datetime.datetime.now()
-            diff = (self.alarm_time - now).total_seconds()
+            alarm_time_str = self.alarm_time.strftime("%Y-%m-%d %H:%M")
+            from alarm_clock import run_clock
 
-            if diff > 0:
-                self.log_signal.emit(
-                    f"⏳ 距离闹钟时间还有 {int(diff // 3600)} 小时 {int((diff % 3600) // 60)} 分钟 {int(diff % 60)} 秒")
-                # 分阶段输出倒计时
-                while diff > 0:
-                    time.sleep(1)
-                    diff -= 1
-                    if diff % 60 == 0:  # 每分钟输出一次
-                        self.log_signal.emit(f"⏳ 剩余时间：{int(diff // 3600)} 小时 {int((diff % 3600) // 60)} 分钟")
-
-            self.finish_signal.emit(True, f"已到设置时间：{self.alarm_time.strftime('%Y-%m-%d %H:%M')}！{self.content}")
-
+            result=run_clock(alarm_time_str)
+            if result:
+                self.finish_signal.emit(True,f"【闹钟触发】已到设置时间：{alarm_time_str}！语音内容：{self.content}")
+            else:
+                self.finish_signal.emit(False, f"闹钟任务执行异常!")
         except Exception as e:
             self.finish_signal.emit(False, f"闹钟异常：{str(e)}")
-
 
 # ====================== 主窗口（复用逻辑） ======================
 class MainWindow(QMainWindow):

@@ -74,7 +74,7 @@ def calculate_path_size(target_path: str, show_detail: bool = True,show_size: in
     # 检查路径是否存在
     if not os.path.exists(target_path):
         print(f"❌ 路径不存在: {target_path}")
-        return
+        return convert_size(0)
 
     # 处理单个文件
     if os.path.isfile(target_path):
@@ -83,6 +83,7 @@ def calculate_path_size(target_path: str, show_detail: bool = True,show_size: in
             print(f"\n📌 单个文件大小：")
             print(f"文件路径: {target_path}")
             print(f"大小: {convert_size(file_size)}")
+            return convert_size(file_size)
     # 处理文件夹
     elif os.path.isdir(target_path):
         print(f"\n📌 文件夹 '{target_path}' 及其子文件大小明细：")
@@ -90,6 +91,7 @@ def calculate_path_size(target_path: str, show_detail: bool = True,show_size: in
         total_size = get_dir_total_size(target_path, show_detail=show_detail,show_size=show_size)
         print("-" * 80)
         print(f"📊 文件夹总大小: {convert_size(total_size)}")
+        return convert_size(total_size)
 
 '''
 判断文件或者文件夹下文件大小 OK
