@@ -790,12 +790,12 @@ class ImageDedupThread(QThread):
                         self.finish_signal.emit(False, f"去重异常：{str(e)}")
         if self.is_delete_dup and dup_count > 0:
             self.finish_signal.emit(True,
-                               f"去重完成！满足条件的图片共 {conform_count} 共检测到 {dup_count + 1} 张重复图片，已删除 {dup_count} 张，保留1张")
+                               f"去重完成！满足条件的图片共 {conform_count}张， 共检测到 {dup_count + 1} 张重复图片，已删除 {dup_count} 张，保留1张")
         elif dup_count > 0:
             self.finish_signal.emit(True,
-                               f"去重完成！满足条件的图片共 {conform_count} 共检测到 {dup_count + 1} 张重复图片（未删除）")
+                               f"去重完成！满足条件的图片共 {conform_count}张，共检测到 {dup_count + 1} 张重复图片（未删除）")
         else:
-            self.finish_signal.emit(True, f"去重完成！满足条件的图片共 {conform_count} 未检测到重复图片")
+            self.finish_signal.emit(True, f"去重完成！满足条件的图片共 {conform_count}张， 未检测到重复图片")
 
     def run(self):
         try:
