@@ -28,6 +28,52 @@ ko-KR：韩语（韩国）
 import pyttsx3
 import sys
 import time
+import threading
+class TtsAlarmThread:
+    def __init__(self):
+        self.is_running = True  # 退出标志位
+        # 初始化引擎
+        self.engine = pyttsx3.init()
+        # 语速：默认200，范围0-500
+        self.engine.setProperty('rate', 200)
+        # 音量：默认1.0，范围0.0-1.0
+        self.engine.setProperty('volume', 1)
+        self.thread = None
+
+    def start(self,thread:threading):
+        self.thread=thread
+        self.thread.start()
+
+    def stop(self):
+        """设置退出标志位，让线程主动退出"""
+        self.is_running = False
+        print("tts_stop")
+        # 关闭引擎
+        self.engine.stop()
+        if self.thread and self.thread.is_alive():
+            # 等待线程完全退出（避免主线程先退出）
+            self.thread.join(timeout=2)
+
+    # 循环播放逻辑
+    def tts_run(self, context='', run_count=5):
+        try:
+            if not context:
+                print("播报信息为空，不播报")
+                return
+            for i in range(run_count):
+                print(f"测试信息 {i}")
+                if self.is_running:
+                    # 基础文字转语音（直接播放）
+                    self.engine.say(context)
+                    self.engine.runAndWait()  # 阻塞直到语音播放完成
+                    time.sleep(1)
+                else:
+                    print("播报已终止")
+                    break
+        except Exception as e:
+            print(f"语音播报失败：{e}")
+        # 关闭引擎-循环完成，自动关闭
+        self.engine.stop()
 
 #打印当前系统支持的语音类型
 def print_support_voices(engine):
@@ -40,8 +86,6 @@ def print_support_voices(engine):
 
     # 切换为中文语音（需系统安装中文语音包，Windows 自带）
     # engine.setProperty('voice', voices[0].id)  # 根据实际索引调整
-
-
 #校验当前系统类型
 def check_system()->str:
     print(f"当前系统 {sys.platform} ")
@@ -87,36 +131,6 @@ def tts_test(context='你好，这是测试'):
 
     # 关闭引擎
     engine.stop()
-
-def tts_init():
-    # 初始化引擎
-    engine = pyttsx3.init()
-    # 语速：默认200，范围0-500
-    engine.setProperty('rate', 200)
-    # 音量：默认1.0，范围0.0-1.0
-    engine.setProperty('volume', 1)
-    return engine
-
-def tts_stop(engine):
-    print("tts_stop")
-    # 关闭引擎
-    engine.stop()
-#循环播放逻辑
-def tts_run(engine,context='',run_count=5):
-    try:
-        if not context:
-            print("播报信息为空，不播报")
-            return
-        for i in range(run_count):
-            print(f"测试信息 {i}")
-            #基础文字转语音（直接播放）
-            engine.say(context)
-            engine.runAndWait()  # 阻塞直到语音播放完成
-            time.sleep(1)
-    except Exception as e:
-        print(f"语音播报失败：{e}")
-    # 关闭引擎-循环完成，自动关闭
-    # engine.stop()
 
 if __name__ == "__main__":
     tts_test()

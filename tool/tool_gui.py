@@ -1018,8 +1018,8 @@ class SmartAlarmPage(QWidget):
         self.alarm_thread = None
         self.alarm_active = False
         # 初始化语音播报
-        from pyttsx3_tts import tts_init
-        self.engine = tts_init()
+        from pyttsx3_tts import TtsAlarmThread
+        self.ttsThread=TtsAlarmThread
         self.init_ui()
 
 
@@ -1342,11 +1342,8 @@ class SmartAlarmPage(QWidget):
         if is_triggered:
             self.append_log(f"⏰ {msg}")
 
-            from pyttsx3_tts import tts_run,tts_stop
-
-            report_thread = threading.Thread(target=tts_run,args=(self.engine, alarm_context, 60), daemon=True)
-            report_thread.start()
-            # tts_run(self.engine, alarm_context, 60)
+            report_thread = threading.Thread(target=self.ttsThread.tts_run,args=(alarm_context, 60), daemon=True)
+            self.ttsThread.start(report_thread)
             # 弹窗提醒
             reply =QMessageBox.information(
                 self,
@@ -1355,9 +1352,7 @@ class SmartAlarmPage(QWidget):
                 QMessageBox.Ok
             )
             if reply == QMessageBox.Ok:
-                tts_stop(self.engine)
-                if report_thread and report_thread.is_alive():
-                    report_thread.join(timeout=2)
+                self.ttsThread.stop()
         else:
             self.append_log(f"❌ {msg}")
 
