@@ -102,17 +102,20 @@ def tts_stop(engine):
     engine.stop()
 #循环播放逻辑
 def tts_run(engine,context='你好，这是测试',run_count=5):
-    if not context:
-        print("播报信息为空，不播报")
-        return
-    for i in range(run_count):
-        print(f"测试信息 {i}")
-        #基础文字转语音（直接播放）
-        engine.say(context)
-        engine.runAndWait()  # 阻塞直到语音播放完成
-        time.sleep(1)
+    try:
+        if not context:
+            print("播报信息为空，不播报")
+            return
+        for i in range(run_count):
+            print(f"测试信息 {i}")
+            #基础文字转语音（直接播放）
+            engine.say(context)
+            engine.runAndWait()  # 阻塞直到语音播放完成
+            time.sleep(1)
+    except Exception as e:
+        print(f"语音播报失败：{e}")
     # 关闭引擎-循环完成，自动关闭
-    engine.stop()
+    # engine.stop()
 
 if __name__ == "__main__":
     tts_test()

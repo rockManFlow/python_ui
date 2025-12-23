@@ -1,6 +1,7 @@
 import sys
 import os
 import datetime
+import threading
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QPushButton, QStackedWidget, QLabel, QFileDialog, QMessageBox,
@@ -1342,7 +1343,10 @@ class SmartAlarmPage(QWidget):
             self.append_log(f"⏰ {msg}")
 
             from pyttsx3_tts import tts_run,tts_stop
-            tts_run(self.engine, alarm_context, 60)
+
+            report_thread = threading.Thread(target=tts_run,args=(self.engine, alarm_context, 60), daemon=True)
+            report_thread.start()
+            # tts_run(self.engine, alarm_context, 60)
             # 弹窗提醒
             reply =QMessageBox.information(
                 self,
@@ -1352,6 +1356,8 @@ class SmartAlarmPage(QWidget):
             )
             if reply == QMessageBox.Ok:
                 tts_stop(self.engine)
+                if report_thread and report_thread.is_alive():
+                    report_thread.join(timeout=2)
         else:
             self.append_log(f"❌ {msg}")
 
