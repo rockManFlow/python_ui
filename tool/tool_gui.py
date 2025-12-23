@@ -1345,13 +1345,13 @@ class SmartAlarmPage(QWidget):
             report_thread = threading.Thread(target=self.ttsThread.tts_run,args=(alarm_context, 60), daemon=True)
             self.ttsThread.start(report_thread)
             # 弹窗提醒
-            reply =QMessageBox.information(
+            result =QMessageBox.information(
                 self,
                 "闹钟提醒",
                 f"{msg}\n\n提醒内容：{self.le_content.text().strip() or '无提醒内容'}"
             )
 
-            if reply==QMessageBox.Ok:
+            if result==QMessageBox.Ok:
                 self.append_log("🛑 已关闭闹钟语音提醒!")
                 self.ttsThread.stop()
         else:
