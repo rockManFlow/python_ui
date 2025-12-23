@@ -98,10 +98,11 @@ def tts_init():
     return engine
 
 def tts_stop(engine):
+    print("tts_stop")
     # 关闭引擎
     engine.stop()
 #循环播放逻辑
-def tts_run(engine,context='你好，这是测试',run_count=5):
+def tts_run(engine,context='',run_count=5):
     try:
         if not context:
             print("播报信息为空，不播报")
