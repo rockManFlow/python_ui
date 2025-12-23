@@ -98,7 +98,11 @@ def tts_init():
     return engine
 #循环播放逻辑
 def tts_run(engine,context='你好，这是测试',run_count=5):
+    if not context:
+        print("播报信息为空，不播报")
+        return
     for i in range(run_count):
+        print("测试信息111")
         #基础文字转语音（直接播放）
         engine.say(context)
         engine.runAndWait()  # 阻塞直到语音播放完成

@@ -1016,11 +1016,12 @@ class SmartAlarmPage(QWidget):
         super().__init__()
         self.alarm_thread = None
         self.alarm_active = False
+        # 初始化语音播报
+        from pyttsx3_tts import tts_init
+        self.engine = tts_init()
         self.init_ui()
 
-        #初始化语音播报
-        from pyttsx3_tts import tts_init
-        self.engine=tts_init()
+
 
     def init_ui(self):
         self.setStyleSheet(PAGE_STYLE)
@@ -1284,7 +1285,7 @@ class SmartAlarmPage(QWidget):
             day = int(self.le_day.text())
             hour = int(self.le_hour.text())
             minute = int(self.le_minute.text())
-            content = self.le_content.text().strip() or "无提醒内容"
+            content = self.le_content.text().strip() or ""
         except ValueError:
             QMessageBox.warning(self, "提示", "请输入有效的年月日时分！")
             return
@@ -1316,7 +1317,7 @@ class SmartAlarmPage(QWidget):
         self.append_log(f"📌 闹钟已启动，将在 {alarm_time.strftime('%Y-%m-%d %H:%M')} 触发！")
         self.append_log(f"📝 语音提醒内容：{content}")
 
-        self.alarm_thread = AlarmThread(alarm_time, content,self.engine)
+        self.alarm_thread = AlarmThread(alarm_time, content)
         self.alarm_thread.log_signal.connect(self.append_log)
         self.alarm_thread.finish_signal.connect(self.on_alarm_finish)
         self.alarm_thread.start()
@@ -1331,7 +1332,7 @@ class SmartAlarmPage(QWidget):
             self.append_log("🛑 已终止当前闹钟")
             QMessageBox.information(self, "提示", "已终止当前闹钟！")
 
-    def on_alarm_finish(self, is_triggered, msg):
+    def on_alarm_finish(self, is_triggered, msg,alarm_context):
         """闹钟完成回调"""
         self.alarm_active = False
         self.btn_set_alarm.setDisabled(False)
@@ -1339,12 +1340,15 @@ class SmartAlarmPage(QWidget):
 
         if is_triggered:
             self.append_log(f"⏰ {msg}")
+
+            from pyttsx3_tts import tts_run
+            tts_run(self.engine, alarm_context, 60)
             # 弹窗提醒
-            QMessageBox.information(
-                self,
-                "闹钟提醒",
-                f"{msg}\n\n提醒内容：{self.le_content.text().strip() or '无提醒内容'}"
-            )
+            # QMessageBox.information(
+            #     self,
+            #     "闹钟提醒",
+            #     f"{msg}\n\n提醒内容：{self.le_content.text().strip() or '无提醒内容'}"
+            # )
         else:
             self.append_log(f"❌ {msg}")
 
@@ -1489,28 +1493,25 @@ class FileSizeThread(QThread):
 class AlarmThread(QThread):
     """闹钟线程"""
     log_signal = pyqtSignal(str)
-    finish_signal = pyqtSignal(bool, str)  # is_triggered, msg
+    finish_signal = pyqtSignal(bool, str, str)  # is_triggered, msg,alarm_context
 
-    def __init__(self, alarm_time, content,engine):
+    def __init__(self, alarm_time, content):
         super().__init__()
         self.alarm_time = alarm_time
         self.content = content
-        self.engine=engine
 
     def run(self):
         try:
             alarm_time_str = self.alarm_time.strftime("%Y-%m-%d %H:%M")
             from alarm_clock import run_clock
-            from pyttsx3_tts import tts_run
 
             result=run_clock(alarm_time_str)
             if result:
-                self.finish_signal.emit(True,f"【闹钟触发】已到设置时间：{alarm_time_str}！语音内容：{self.content}")
-                tts_run(self.engine,self.content,60)
+                self.finish_signal.emit(True,f"【闹钟触发】已到设置时间：{alarm_time_str}！语音内容：{self.content}",self.content)
             else:
-                self.finish_signal.emit(False, f"闹钟任务执行异常!")
+                self.finish_signal.emit(False, f"闹钟任务执行异常!",self.content)
         except Exception as e:
-            self.finish_signal.emit(False, f"闹钟异常：{str(e)}")
+            self.finish_signal.emit(False, f"闹钟异常：{str(e)}",self.content)
 
 # ====================== 主窗口（复用逻辑） ======================
 class MainWindow(QMainWindow):
