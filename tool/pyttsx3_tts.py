@@ -31,7 +31,7 @@ import time
 import threading
 class TtsAlarmThread:
     def __init__(self):
-        self.is_running = True  # 退出标志位
+        self.is_running = True  # 退出标志位,开启
         # 初始化引擎
         self.engine = pyttsx3.init()
         # 语速：默认200，范围0-500
@@ -40,7 +40,8 @@ class TtsAlarmThread:
         self.engine.setProperty('volume', 1)
         self.thread = None
 
-    def start(self,thread:threading):
+    def start(self,thread:threading.Thread):
+        self.is_running=True
         self.thread=thread
         self.thread.start()
 

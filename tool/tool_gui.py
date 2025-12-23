@@ -1019,7 +1019,7 @@ class SmartAlarmPage(QWidget):
         self.alarm_active = False
         # 初始化语音播报
         from pyttsx3_tts import TtsAlarmThread
-        self.ttsThread=TtsAlarmThread
+        self.ttsThread=TtsAlarmThread()
         self.init_ui()
 
 
@@ -1348,10 +1348,11 @@ class SmartAlarmPage(QWidget):
             reply =QMessageBox.information(
                 self,
                 "闹钟提醒",
-                f"{msg}\n\n提醒内容：{self.le_content.text().strip() or '无提醒内容'}",
-                QMessageBox.Ok
+                f"{msg}\n\n提醒内容：{self.le_content.text().strip() or '无提醒内容'}"
             )
-            if reply == QMessageBox.Ok:
+
+            if reply==QMessageBox.Ok:
+                self.append_log("🛑 已关闭闹钟语音提醒!")
                 self.ttsThread.stop()
         else:
             self.append_log(f"❌ {msg}")
