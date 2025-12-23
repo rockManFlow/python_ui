@@ -1498,10 +1498,14 @@ class AlarmThread(QThread):
         try:
             alarm_time_str = self.alarm_time.strftime("%Y-%m-%d %H:%M")
             from alarm_clock import run_clock
+            from pyttsx3_tts import tts_run
 
             result=run_clock(alarm_time_str)
             if result:
                 self.finish_signal.emit(True,f"【闹钟触发】已到设置时间：{alarm_time_str}！语音内容：{self.content}")
+                for i in range(60):
+                    tts_run(self.content)
+                    time.sleep(1)
             else:
                 self.finish_signal.emit(False, f"闹钟任务执行异常!")
         except Exception as e:

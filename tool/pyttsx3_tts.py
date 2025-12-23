@@ -64,18 +64,18 @@ def tts_run(context='你好，这是测试'):
 
     # 1. 基础文字转语音（直接播放）
     engine.say(context)
-    engine.say("Hello, this is an offline TTS test")
+    # engine.say("Hello, this is an offline TTS test")
     engine.runAndWait()  # 阻塞直到语音播放完成
 
     # 2. 调整参数（语速、音量、语音类型）
     # 语速：默认200，范围0-500
-    engine.setProperty('rate', 150)
+    # engine.setProperty('rate', 150)
     # 音量：默认1.0，范围0.0-1.0
-    engine.setProperty('volume', 0.8)
+    # engine.setProperty('volume', 0.8)
 
-    engine.say(context)
-    engine.say("Hello, this is an offline TTS test")
-    engine.runAndWait()  # 阻塞直到语音播放完成
+    # engine.say(context)
+    # engine.say("Hello, this is an offline TTS test")
+    # engine.runAndWait()  # 阻塞直到语音播放完成
 
     sys_type=check_system()
     if 'win'==sys_type :
