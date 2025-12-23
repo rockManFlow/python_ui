@@ -96,18 +96,22 @@ def tts_init():
     # 音量：默认1.0，范围0.0-1.0
     engine.setProperty('volume', 1)
     return engine
+
+def tts_stop(engine):
+    # 关闭引擎
+    engine.stop()
 #循环播放逻辑
 def tts_run(engine,context='你好，这是测试',run_count=5):
     if not context:
         print("播报信息为空，不播报")
         return
     for i in range(run_count):
-        print("测试信息111")
+        print(f"测试信息 {i}")
         #基础文字转语音（直接播放）
         engine.say(context)
         engine.runAndWait()  # 阻塞直到语音播放完成
         time.sleep(1)
-    # 关闭引擎
+    # 关闭引擎-循环完成，自动关闭
     engine.stop()
 
 if __name__ == "__main__":

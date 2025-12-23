@@ -1341,14 +1341,17 @@ class SmartAlarmPage(QWidget):
         if is_triggered:
             self.append_log(f"⏰ {msg}")
 
-            from pyttsx3_tts import tts_run
+            from pyttsx3_tts import tts_run,tts_stop
             tts_run(self.engine, alarm_context, 60)
             # 弹窗提醒
-            # QMessageBox.information(
-            #     self,
-            #     "闹钟提醒",
-            #     f"{msg}\n\n提醒内容：{self.le_content.text().strip() or '无提醒内容'}"
-            # )
+            reply =QMessageBox.information(
+                self,
+                "闹钟提醒",
+                f"{msg}\n\n提醒内容：{self.le_content.text().strip() or '无提醒内容'}",
+                QMessageBox.Ok
+            )
+            if reply == QMessageBox.Ok:
+                tts_stop(self.engine)
         else:
             self.append_log(f"❌ {msg}")
 
