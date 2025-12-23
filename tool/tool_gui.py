@@ -1018,6 +1018,10 @@ class SmartAlarmPage(QWidget):
         self.alarm_active = False
         self.init_ui()
 
+        #初始化语音播报
+        from pyttsx3_tts import tts_init
+        self.engine=tts_init()
+
     def init_ui(self):
         self.setStyleSheet(PAGE_STYLE)
         main_layout = QVBoxLayout(self)
@@ -1312,7 +1316,7 @@ class SmartAlarmPage(QWidget):
         self.append_log(f"📌 闹钟已启动，将在 {alarm_time.strftime('%Y-%m-%d %H:%M')} 触发！")
         self.append_log(f"📝 语音提醒内容：{content}")
 
-        self.alarm_thread = AlarmThread(alarm_time, content)
+        self.alarm_thread = AlarmThread(alarm_time, content,self.engine)
         self.alarm_thread.log_signal.connect(self.append_log)
         self.alarm_thread.finish_signal.connect(self.on_alarm_finish)
         self.alarm_thread.start()
@@ -1487,10 +1491,11 @@ class AlarmThread(QThread):
     log_signal = pyqtSignal(str)
     finish_signal = pyqtSignal(bool, str)  # is_triggered, msg
 
-    def __init__(self, alarm_time, content):
+    def __init__(self, alarm_time, content,engine):
         super().__init__()
         self.alarm_time = alarm_time
         self.content = content
+        self.engine=engine
 
     def run(self):
         try:
@@ -1501,7 +1506,7 @@ class AlarmThread(QThread):
             result=run_clock(alarm_time_str)
             if result:
                 self.finish_signal.emit(True,f"【闹钟触发】已到设置时间：{alarm_time_str}！语音内容：{self.content}")
-                tts_run(self.content,60)
+                tts_run(self.engine,self.content,60)
             else:
                 self.finish_signal.emit(False, f"闹钟任务执行异常!")
         except Exception as e:

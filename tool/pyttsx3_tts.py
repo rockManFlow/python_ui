@@ -57,7 +57,7 @@ def check_system()->str:
     else:
         print(f"无法识别当前系统 {sys.platform} ")
         return "un"
-#验证OK，可直接播放
+#验证OK，可直接播放--pyttsx3只能在主线程中初始化，不能在子线程
 def tts_test(context='你好，这是测试'):
     # 初始化引擎
     engine = pyttsx3.init()
@@ -88,10 +88,16 @@ def tts_test(context='你好，这是测试'):
     # 关闭引擎
     engine.stop()
 
-#循环播放逻辑
-def tts_run(context='你好，这是测试',run_count=5):
+def tts_init():
     # 初始化引擎
     engine = pyttsx3.init()
+    # 语速：默认200，范围0-500
+    engine.setProperty('rate', 200)
+    # 音量：默认1.0，范围0.0-1.0
+    engine.setProperty('volume', 1)
+    return engine
+#循环播放逻辑
+def tts_run(engine,context='你好，这是测试',run_count=5):
     for i in range(run_count):
         #基础文字转语音（直接播放）
         engine.say(context)
@@ -101,4 +107,4 @@ def tts_run(context='你好，这是测试',run_count=5):
     engine.stop()
 
 if __name__ == "__main__":
-    tts_run()
+    tts_test()
