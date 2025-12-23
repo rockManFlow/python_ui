@@ -27,6 +27,7 @@ ko-KR：韩语（韩国）
 '''
 import pyttsx3
 import sys
+import time
 
 #打印当前系统支持的语音类型
 def print_support_voices(engine):
@@ -56,9 +57,8 @@ def check_system()->str:
     else:
         print(f"无法识别当前系统 {sys.platform} ")
         return "un"
-
 #验证OK，可直接播放
-def tts_run(context='你好，这是测试'):
+def tts_test(context='你好，这是测试'):
     # 初始化引擎
     engine = pyttsx3.init()
 
@@ -85,6 +85,18 @@ def tts_run(context='你好，这是测试'):
     else:
         print("非win系统，不支持保存")
 
+    # 关闭引擎
+    engine.stop()
+
+#循环播放逻辑
+def tts_run(context='你好，这是测试',run_count=5):
+    # 初始化引擎
+    engine = pyttsx3.init()
+    for i in range(run_count):
+        #基础文字转语音（直接播放）
+        engine.say(context)
+        engine.runAndWait()  # 阻塞直到语音播放完成
+        time.sleep(1)
     # 关闭引擎
     engine.stop()
 
