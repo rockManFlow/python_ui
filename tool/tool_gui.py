@@ -744,22 +744,23 @@ class FileSizeToolPage(QWidget):
         main_layout.addWidget(title_group)
 
         # 2. 文件/文件夹选择区域
+        # 2. 文件/文件夹选择区域
         file_group = QGroupBox("路径选择")
         file_group.setStyleSheet("""
-            QGroupBox {
-                font: bold 14px 微软雅黑;
-                color: black;
-                border: 1px solid #DDDDDD;
-                border-radius: 8px;
-                padding: 15px;
-                margin-top: 10px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 8px 0 8px;
-            }
-        """)
+                    QGroupBox {
+                        font: bold 14px 微软雅黑;
+                        color: black;
+                        border: 1px solid #DDDDDD;
+                        border-radius: 8px;
+                        padding: 15px;
+                        margin-top: 10px;
+                    }
+                    QGroupBox::title {
+                        subcontrol-origin: margin;
+                        left: 10px;
+                        padding: 0 8px 0 8px;
+                    }
+                """)
         file_layout = QVBoxLayout(file_group)
         file_layout.setSpacing(15)
         file_layout.setContentsMargins(10, 10, 10, 10)
@@ -777,16 +778,16 @@ class FileSizeToolPage(QWidget):
         self.btn_file.setFixedSize(100, 35)
         self.btn_file.setFont(BUTTON_FONT)
         self.btn_file.setStyleSheet("""
-            QPushButton {
-                background-color: #3498DB;
-                color: white;
-                border: none;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #2980B9;
-            }
-        """)
+                    QPushButton {
+                        background-color: #3498DB;
+                        color: white;
+                        border: none;
+                        border-radius: 5px;
+                    }
+                    QPushButton:hover {
+                        background-color: #2980B9;
+                    }
+                """)
         self.btn_file.clicked.connect(self.select_file)
         path_row_layout.addWidget(self.btn_file)
 
@@ -795,16 +796,16 @@ class FileSizeToolPage(QWidget):
         self.btn_folder.setFixedSize(100, 35)
         self.btn_folder.setFont(BUTTON_FONT)
         self.btn_folder.setStyleSheet("""
-            QPushButton {
-                background-color: #3498DB;
-                color: white;
-                border: none;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #2980B9;
-            }
-        """)
+                    QPushButton {
+                        background-color: #3498DB;
+                        color: white;
+                        border: none;
+                        border-radius: 5px;
+                    }
+                    QPushButton:hover {
+                        background-color: #2980B9;
+                    }
+                """)
         self.btn_folder.clicked.connect(self.select_folder)
         path_row_layout.addWidget(self.btn_folder)
 
@@ -816,6 +817,35 @@ class FileSizeToolPage(QWidget):
         path_row_layout.addWidget(self.lbl_path)
 
         file_layout.addWidget(path_row)
+
+        # 新增：大小阈值输入行
+        size_input_row = QWidget()
+        size_input_row_layout = QHBoxLayout(size_input_row)
+        size_input_row_layout.setSpacing(10)
+        size_input_row_layout.setAlignment(Qt.AlignCenter)
+        size_input_row_layout.setContentsMargins(0, 0, 0, 0)
+
+        # 输入框标签
+        lbl_size = QLabel("大小阈值（字节）：")
+        lbl_size.setFont(DESC_FONT)
+        size_input_row_layout.addWidget(lbl_size)
+
+        # 整数输入框（仅允许输入整数）
+        self.le_size = QLineEdit()
+        self.le_size.setFixedWidth(120)
+        self.le_size.setFont(DESC_FONT)
+        self.le_size.setPlaceholderText("请输入整数（字节）")
+        # 设置仅允许输入整数
+        self.le_size.setValidator(QIntValidator(0, 2147483647))
+        size_input_row_layout.addWidget(self.le_size)
+
+        # 换算关系提示标签
+        tip_label = QLabel("换算：1KB=1024B | 1MB=1024KB | 1GB=1024MB")
+        tip_label.setFont(QFont("微软雅黑", 9))
+        tip_label.setStyleSheet("color: #666666;")
+        size_input_row_layout.addWidget(tip_label)
+
+        file_layout.addWidget(size_input_row)
 
         main_layout.addWidget(file_group)
 
@@ -933,14 +963,25 @@ class FileSizeToolPage(QWidget):
             QMessageBox.warning(self, "提示", "请先选择文件或文件夹！")
             return
 
+        # 新增：获取用户输入的大小阈值（处理空值）
+        user_size = 0
+        if self.le_size.text().strip():
+            try:
+                user_size = int(self.le_size.text().strip())
+            except ValueError:
+                QMessageBox.warning(self, "提示", "大小阈值请输入有效整数！")
+                return
+
         self.btn_calc.setDisabled(True)
         self.btn_calc.setText("计算中...")
         QApplication.processEvents()
 
+        # 新增：日志输出用户输入的阈值
+        self.append_log(f"📌 开始统计文件/文件夹大小（阈值：{user_size} 字节）...")
         self.append_log("📌 开始统计文件/文件夹大小...")
 
         try:
-            self.size_thread = FileSizeThread(self.selected_path)
+            self.size_thread = FileSizeThread(self.selected_path,user_size)
             self.size_thread.log_signal.connect(self.append_log)
             self.size_thread.finish_signal.connect(self.on_calc_finish)
             self.size_thread.start()
@@ -1282,8 +1323,7 @@ class SmartAlarmPage(QWidget):
         """终止闹钟"""
         if self.alarm_active and self.alarm_thread:
             self.alarm_active = False
-            self.alarm_thread.join(timeout=2)  # 等待线程退出
-            # self.alarm_thread.terminate()
+            self.alarm_thread.terminate()
             self.btn_set_alarm.setDisabled(False)
             self.btn_stop_alarm.setDisabled(True)
             self.append_log("🛑 已终止当前闹钟")
@@ -1418,9 +1458,10 @@ class FileSizeThread(QThread):
     log_signal = pyqtSignal(str)
     finish_signal = pyqtSignal(bool, str)
 
-    def __init__(self, path):
+    def __init__(self, path,user_size):
         super().__init__()
         self.path = path
+        self.user_size = user_size  # 接收用户输入的大小阈值
 
     def run(self):
         try:
@@ -1433,7 +1474,7 @@ class FileSizeThread(QThread):
                 return
 
             self.log_signal.emit(f"程序处理中，请稍后...")
-            result = calculate_path_size(self.path, True, 31457280)
+            result = calculate_path_size(self.path, True, self.user_size)
 
             if os.path.isfile(self.path):
                 self.finish_signal.emit(True, f"文件 {os.path.basename(self.path)} 大小：{result}")

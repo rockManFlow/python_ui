@@ -84,6 +84,8 @@ def calculate_path_size(target_path: str, show_detail: bool = True,show_size: in
             print(f"文件路径: {target_path}")
             print(f"大小: {convert_size(file_size)}")
             return convert_size(file_size)
+        else:
+            return convert_size(0)
     # 处理文件夹
     elif os.path.isdir(target_path):
         print(f"\n📌 文件夹 '{target_path}' 及其子文件大小明细：")
