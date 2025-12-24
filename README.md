@@ -25,4 +25,13 @@ pyinstaller -F -w -i icon.ico -n "视频帧提取工具" ^
 --add-data "config.ini;." ^        # 配置文件同理
 main.py
 
+示例1：
 pyinstaller -D -w -i file_tool.ico -n "哈哈小工具" --add-data "target_2.py;" --clean refer_gui.py
+
+示例2：OK
+pyinstaller -F -w -i file_tool.ico 
+--add-data "target_script.py;." 
+--add-data "alarm_clock.py;." 
+--clean   
+--distpath exe_out  #指定输出存储路径
+tool_gui.py
