@@ -34,7 +34,7 @@ class HomePage(QWidget):
         layout.setSpacing(30)
 
         # 大标题
-        title = QLabel("多媒体工具集")
+        title = QLabel("window小工具集")
         title.setFont(TITLE_FONT)
         title.setAlignment(Qt.AlignCenter)
         title.setStyleSheet("color: black;")
@@ -42,17 +42,18 @@ class HomePage(QWidget):
 
         # 功能介绍（统一文字格式）
         desc = QLabel("""
-        欢迎使用多媒体工具集！
+        欢迎使用window小工具集！
         \n功能说明：
         • 视频模块：支持视频帧提取为图片、视频格式转换等
         • 图片模块：支持图片去重、图片批量处理等
+        • 其他工具模块：支持判断文件或者文件夹大小、智能闹钟语音提醒
         \n使用方式：点击左侧菜单选择对应功能
         """)
         desc.setFont(DESC_FONT)
         desc.setAlignment(Qt.AlignCenter)
         desc.setWordWrap(True)
         desc.setStyleSheet("color: #333333; line-height: 1.4;")
-        desc.setMaximumWidth(800)  # 统一宽度限制
+        desc.setMaximumWidth(1000)  # 统一宽度限制
         layout.addWidget(desc)
 
 class VideoFrame2PicPage(QWidget):
@@ -261,7 +262,7 @@ class VideoFrame2PicPage(QWidget):
             self,
             "选择视频文件",
             "",
-            "视频文件 (*.mp4 *.avi *.mov *.mkv *.*)"
+            "视频文件 (*.mp4 *.avi *.mov *.mkv)"
         )
         if file_path:
             self.selected_video = file_path
@@ -358,11 +359,7 @@ class VideoOtherToolsPage(QWidget):
 
         # 功能描述（统一格式）
         desc = QLabel("""
-        待开发功能：
-        • 视频格式转换（MP4 ↔ AVI ↔ MOV 等）
-        • 视频剪辑（截取指定时间段）
-        • 视频压缩（调整分辨率/码率）
-        • 音频提取（从视频中提取音频文件）
+        规划中...
         """)
         desc.setFont(DESC_FONT)
         desc.setAlignment(Qt.AlignCenter)
@@ -688,11 +685,7 @@ class ImageProcessPage(QWidget):
 
         # 功能描述（统一格式）
         desc = QLabel("""
-        待开发功能：
-        • 批量图片压缩（调整大小/质量）
-        • 图片格式转换（PNG ↔ JPG ↔ WEBP 等）
-        • 图片裁剪（按比例/自定义尺寸）
-        • 图片水印（添加文字/图片水印）
+        规划中...
         """)
         desc.setFont(DESC_FONT)
         desc.setAlignment(Qt.AlignCenter)
@@ -1530,7 +1523,7 @@ class MainWindow(QMainWindow):
         self.init_main_ui()
 
     def init_main_ui(self):
-        self.setWindowTitle("多媒体工具集")
+        self.setWindowTitle("window小工具集")
         self.setGeometry(100, 100, 1100, 700)
         self.setMinimumSize(900, 600)
 
@@ -1560,7 +1553,7 @@ class MainWindow(QMainWindow):
         self.all_menu_btns.append(self.home_btn)
 
         # 视频菜单组
-        self.video_btn = self.create_main_menu_btn("视频 ▼")
+        self.video_btn = self.create_main_menu_btn("视频")
         self.video_btn.clicked.connect(self.toggle_video_submenu)
         self.left_layout.addWidget(self.video_btn)
         self.all_menu_btns.append(self.video_btn)
@@ -1593,7 +1586,7 @@ class MainWindow(QMainWindow):
         self.left_layout.addWidget(self.video_submenu_widget)
 
         # 图片菜单组
-        self.image_btn = self.create_main_menu_btn("图片 ▼")
+        self.image_btn = self.create_main_menu_btn("图片")
         self.image_btn.clicked.connect(self.toggle_image_submenu)
         self.left_layout.addWidget(self.image_btn)
         self.all_menu_btns.append(self.image_btn)
@@ -1626,7 +1619,7 @@ class MainWindow(QMainWindow):
         self.left_layout.addWidget(self.image_submenu_widget)
 
         # 新增：其他工具菜单组
-        self.other_btn = self.create_main_menu_btn("其他工具 ▼")
+        self.other_btn = self.create_main_menu_btn("其他工具")
         self.other_btn.clicked.connect(self.toggle_other_submenu)
         self.left_layout.addWidget(self.other_btn)
         self.all_menu_btns.append(self.other_btn)
@@ -1746,14 +1739,14 @@ class MainWindow(QMainWindow):
     def toggle_video_submenu(self):
         self.video_menu_expanded = not self.video_menu_expanded
         self.video_submenu_widget.setVisible(self.video_menu_expanded)
-        self.video_btn.setText("视频 ▲" if self.video_menu_expanded else "视频 ▼")
+        self.video_btn.setText("视频" if self.video_menu_expanded else "视频")
         if self.video_menu_expanded and not any([self.video_frame_btn.isChecked(), self.video_other_btn.isChecked()]):
             self.set_selected_btn(self.video_btn)
 
     def toggle_image_submenu(self):
         self.image_menu_expanded = not self.image_menu_expanded
         self.image_submenu_widget.setVisible(self.image_menu_expanded)
-        self.image_btn.setText("图片 ▲" if self.image_menu_expanded else "图片 ▼")
+        self.image_btn.setText("图片" if self.image_menu_expanded else "图片")
         if self.image_menu_expanded and not any([self.image_dedup_btn.isChecked(), self.image_process_btn.isChecked()]):
             self.set_selected_btn(self.image_btn)
 
@@ -1761,7 +1754,7 @@ class MainWindow(QMainWindow):
     def toggle_other_submenu(self):
         self.other_menu_expanded = not self.other_menu_expanded
         self.other_submenu_widget.setVisible(self.other_menu_expanded)
-        self.other_btn.setText("其他工具 ▲" if self.other_menu_expanded else "其他工具 ▼")
+        self.other_btn.setText("其他工具" if self.other_menu_expanded else "其他工具")
         if self.other_menu_expanded and not any([self.file_size_btn.isChecked(), self.alarm_btn.isChecked()]):
             self.set_selected_btn(self.other_btn)
 
